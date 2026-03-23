@@ -1,0 +1,81 @@
+# Dione - Git Ignore Rules
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+.venv/
+venv/
+env/
+
+# Environment
+.env
+.env.local
+.env.example
+
+# Data (local storage - never commit)
+data/
+*.db
+*.sqlite3
+
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+.pnp
+
+# Backup & Lock files
+*.lock
+*_backup*
+requirements_backup.txt
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Flutter
+mobile/dione_app/build/
+mobile/dione_app/.dart_tool/
+mobile/dione_app/.packages
+mobile/dione_app/.flutter-plugins
+mobile/dione_app/.flutter-plugins-dependencies
+mobile/dione_app/android/.gradle/
+mobile/dione_app/ios/Pods/
+mobile/dione_app/ios/.symlinks/
+
+# Logs
+*.log
+logs/
+
+# Model files (too large)
+*.gguf
+*.bin
+models/
+
+# Build outputs
+installer_output/
+*.exe
+*.msi
+
+# External documentation repos
+docs/openclaw-main/
+docs/openclaw-main.zip
+docs/Synopsis.pdf
+
+# Secrets
+credentials/
+tokens/
+*.pem
+*.key

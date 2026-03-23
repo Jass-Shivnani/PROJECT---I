@@ -1,0 +1,45 @@
+# Dione AI - Python Dependencies
+
+# === Core Framework ===
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+websockets>=12.0
+pydantic>=2.5.0
+pydantic-settings>=2.1.0
+python-dotenv>=1.0.0
+
+# === LLM Backends ===
+ollama>=0.1.6
+# llama-cpp-python>=0.2.0  # Uncomment if using llama.cpp directly
+
+# === Knowledge Graph ===
+networkx>=3.2.0
+# neo4j>=5.0.0  # Uncomment for production graph DB
+
+# === Vector Store & Embeddings ===
+chromadb>=0.4.22
+sentence-transformers>=2.3.0
+
+# === Sentiment Analysis ===
+transformers>=4.36.0
+torch>=2.1.0  # CPU-only; use torch+cu121 for GPU
+
+# === Memory & Context ===
+tiktoken>=0.5.0  # Token counting
+
+# === Plugin System ===
+aiohttp>=3.9.0  # Async HTTP for plugins
+aiofiles>=23.2.0
+
+# === Security ===
+python-jose[cryptography]>=3.3.0  # JWT tokens
+passlib[bcrypt]>=1.7.4
+
+# === Utilities ===
+loguru>=0.7.0  # Better logging
+rich>=13.7.0  # Rich terminal output
+typer>=0.9.0  # CLI interface
+httpx>=0.26.0  # Modern HTTP client
+
+# === Database ===
+aiosqlite>=0.19.0  # Async SQLite
