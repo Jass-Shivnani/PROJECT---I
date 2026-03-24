@@ -141,7 +141,7 @@ async function connectWhatsApp() {
   });
 
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
-    if (type !== "notify") return;
+    if (!["notify", "append"].includes(type)) return;
 
     for (const msg of messages) {
       if (msg.key.remoteJid === "status@broadcast") continue;
