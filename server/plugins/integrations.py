@@ -1314,7 +1314,14 @@ class WhatsAppIntegration(BaseIntegration):
 
         bridge_port = int(self.credentials.extra.get("bridge_port", 8901))
         dione_port = int(self.credentials.extra.get("dione_port", 8900))
-        return get_bridge(dione_port=dione_port, bridge_port=bridge_port)
+        allowed_chat_id = str(self.credentials.extra.get("allowed_chat_id", "")).strip()
+        allowed_number = str(self.credentials.extra.get("allowed_number", "")).strip()
+        return get_bridge(
+            dione_port=dione_port,
+            bridge_port=bridge_port,
+            allowed_chat_id=allowed_chat_id,
+            allowed_number=allowed_number,
+        )
 
     def _ensure_bridge_started(self) -> bool:
         bridge = self._bridge_from_credentials()
@@ -1328,7 +1335,14 @@ class WhatsAppIntegration(BaseIntegration):
 
             dione_port = int(params.get("dione_port", 8900))
             bridge_port = int(params.get("bridge_port", 8901))
-            bridge = get_bridge(dione_port=dione_port, bridge_port=bridge_port)
+            allowed_chat_id = str(params.get("allowed_chat_id", "")).strip()
+            allowed_number = str(params.get("allowed_number", "")).strip()
+            bridge = get_bridge(
+                dione_port=dione_port,
+                bridge_port=bridge_port,
+                allowed_chat_id=allowed_chat_id,
+                allowed_number=allowed_number,
+            )
 
             started = bridge.start()
             if not started:
@@ -1341,6 +1355,8 @@ class WhatsAppIntegration(BaseIntegration):
                     "mode": "web_bridge",
                     "bridge_port": bridge_port,
                     "dione_port": dione_port,
+                    "allowed_chat_id": allowed_chat_id,
+                    "allowed_number": allowed_number,
                 },
             )
             return True

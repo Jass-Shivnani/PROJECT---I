@@ -403,6 +403,10 @@ def integrations(
             console.print("[dim]This starts a local Node.js bridge and generates QR for WhatsApp linking.[/dim]")
             params["dione_port"] = int(Prompt.ask("Dione port", default="8900"))
             params["bridge_port"] = int(Prompt.ask("Bridge port", default="8901"))
+            params["allowed_number"] = Prompt.ask(
+                "Reply only to this personal number (optional, with country code)",
+                default="",
+            ).strip()
         else:
             raw = Prompt.ask("Optional JSON params", default="{}")
             try:

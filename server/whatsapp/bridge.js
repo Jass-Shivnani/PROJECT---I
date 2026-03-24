@@ -20,6 +20,7 @@ const DIONE_INBOUND_URL = `http://127.0.0.1:${DIONE_PORT}/api/channels/whatsapp/
 const logger = pino({ level: process.env.LOG_LEVEL || "warn" });
 const REPLY_SCOPE = (process.env.WA_REPLY_SCOPE || "personal").toLowerCase();
 const ALLOWED_CHAT_ID = (process.env.WA_ALLOWED_CHAT_ID || "").trim();
+const ALLOWED_NUMBER = (process.env.WA_ALLOWED_NUMBER || "").replace("+", "").trim();
 
 let sock = null;
 let currentQR = null;
@@ -39,11 +40,18 @@ function normalizeJidNumber(jid = "") {
 }
 
 function shouldProcessForReply(senderJid, isGroup) {
-  if (REPLY_SCOPE !== "personal") return true;
-  if (isGroup) return false;
+  if (REPLY_SCOPE === "all") return true;
+
+  // Default "personal": only self chat (not groups/broadcast)
+  if (isGroup || !senderJid.endsWith("@s.whatsapp.net")) return false;
 
   if (ALLOWED_CHAT_ID) {
     return senderJid === ALLOWED_CHAT_ID;
+  }
+
+  if (ALLOWED_NUMBER) {
+    const chatNumber = normalizeJidNumber(senderJid);
+    return chatNumber === ALLOWED_NUMBER;
   }
 
   const selfNumber = normalizeJidNumber(sock?.user?.id || "");

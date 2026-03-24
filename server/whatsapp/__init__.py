@@ -79,10 +79,19 @@ def install_deps() -> bool:
 class WhatsAppBridge:
     """Manages the Node.js WhatsApp-Baileys bridge subprocess."""
 
-    def __init__(self, dione_port: int = 8900, bridge_port: int = DEFAULT_BRIDGE_PORT, auth_dir: Optional[str] = None):
+    def __init__(
+        self,
+        dione_port: int = 8900,
+        bridge_port: int = DEFAULT_BRIDGE_PORT,
+        auth_dir: Optional[str] = None,
+        allowed_chat_id: str = "",
+        allowed_number: str = "",
+    ):
         self.dione_port = dione_port
         self.bridge_port = bridge_port
         self.auth_dir = auth_dir or str(AUTH_DIR_DEFAULT)
+        self.allowed_chat_id = allowed_chat_id.strip()
+        self.allowed_number = allowed_number.replace("+", "").strip()
         self._process: Optional[subprocess.Popen] = None
         self._running = False
 
@@ -125,6 +134,10 @@ class WhatsAppBridge:
             "WA_AUTH_DIR": str(Path(self.auth_dir).resolve()),
             "LOG_LEVEL": "warn",
         }
+        if self.allowed_chat_id:
+            env["WA_ALLOWED_CHAT_ID"] = self.allowed_chat_id
+        if self.allowed_number:
+            env["WA_ALLOWED_NUMBER"] = self.allowed_number
 
         try:
             self._process = subprocess.Popen(
@@ -230,8 +243,28 @@ class WhatsAppBridge:
 _bridge_instance: Optional[WhatsAppBridge] = None
 
 
-def get_bridge(dione_port: int = 8900, bridge_port: int = DEFAULT_BRIDGE_PORT) -> WhatsAppBridge:
+def get_bridge(
+    dione_port: int = 8900,
+    bridge_port: int = DEFAULT_BRIDGE_PORT,
+    allowed_chat_id: str = "",
+    allowed_number: str = "",
+) -> WhatsAppBridge:
     global _bridge_instance
-    if _bridge_instance is None:
-        _bridge_instance = WhatsAppBridge(dione_port=dione_port, bridge_port=bridge_port)
+    needs_new = (
+        _bridge_instance is None
+        or _bridge_instance.dione_port != dione_port
+        or _bridge_instance.bridge_port != bridge_port
+        or _bridge_instance.allowed_chat_id != allowed_chat_id.strip()
+        or _bridge_instance.allowed_number != allowed_number.replace("+", "").strip()
+    )
+
+    if needs_new:
+        if _bridge_instance and _bridge_instance.is_running:
+            _bridge_instance.stop()
+        _bridge_instance = WhatsAppBridge(
+            dione_port=dione_port,
+            bridge_port=bridge_port,
+            allowed_chat_id=allowed_chat_id,
+            allowed_number=allowed_number,
+        )
     return _bridge_instance
