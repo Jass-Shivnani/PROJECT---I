@@ -429,6 +429,23 @@ class IntegrationRegistry:
                 file_id=str(params.get("file_id", "")).strip()
             )
 
+        if tool_name == "whatsapp_send" and hasattr(integration, "send_message"):
+            to_value = str(params.get("to", "")).strip()
+            text_value = str(
+                params.get("text")
+                or params.get("message")
+                or params.get("body")
+                or ""
+            ).strip()
+
+            if not to_value or not text_value:
+                raise RuntimeError("whatsapp_send requires both 'to' and 'text'")
+
+            return await integration.send_message(
+                to=to_value,
+                text=text_value,
+            )
+
         raise RuntimeError(f"Tool '{tool_name}' is not implemented for integration '{integration.INTEGRATION_ID}'")
     
     def get_integration(self, integration_id: str) -> Optional[BaseIntegration]:
