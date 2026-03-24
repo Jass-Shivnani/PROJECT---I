@@ -93,9 +93,61 @@ class _HomeScreenState extends State<HomeScreen> {
                   // Proactive suggestions from Dione
                   _buildProactiveSuggestions(context),
 
+                  const SizedBox(height: 16),
+
+                  // Quick action grid
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    child: GridView.count(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 2.2,
+                      children: [
+                        _buildActionCard(
+                          context,
+                          Icons.chat_bubble_outline,
+                          'Chat',
+                          'Talk to Dione',
+                          () => Navigator.push(context,
+                              MaterialPageRoute(builder: (_) => const ChatScreen())),
+                        ),
+                        _buildActionCard(
+                          context,
+                          Icons.folder_outlined,
+                          'Files',
+                          'Browse & manage',
+                          () {
+                            Navigator.push(context,
+                                MaterialPageRoute(builder: (_) => const ChatScreen()));
+                            // Will auto-send file browse command
+                          },
+                        ),
+                        _buildActionCard(
+                          context,
+                          Icons.settings_outlined,
+                          'Settings',
+                          'Configure Dione',
+                          () => Navigator.push(context,
+                              MaterialPageRoute(builder: (_) => const SettingsScreen())),
+                        ),
+                        _buildActionCard(
+                          context,
+                          Icons.monitor_heart_outlined,
+                          'Status',
+                          'Server health',
+                          () => Navigator.push(context,
+                              MaterialPageRoute(builder: (_) => const SettingsScreen())),
+                        ),
+                      ],
+                    ),
+                  ),
+
                   const Spacer(),
 
-                  // Chat button
+                  // Main chat button
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 32),
                     child: SizedBox(
@@ -115,34 +167,51 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 16),
-
-                  // Settings button
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: SizedBox(
-                      width: double.infinity,
-                      height: 56,
-                      child: OutlinedButton.icon(
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                                builder: (_) => const SettingsScreen()),
-                          );
-                        },
-                        icon: const Icon(Icons.settings_outlined),
-                        label: const Text('Settings'),
-                      ),
-                    ),
-                  ),
-
                   const SizedBox(height: 32),
                 ],
               ),
             ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildActionCard(BuildContext context, IconData icon, String title,
+      String subtitle, VoidCallback onTap) {
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Row(
+            children: [
+              Icon(icon, size: 28,
+                  color: Theme.of(context).colorScheme.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(title,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w600, fontSize: 14)),
+                    Text(subtitle,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurface
+                              .withOpacity(0.5),
+                        )),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

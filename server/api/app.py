@@ -180,17 +180,18 @@ def create_app() -> FastAPI:
     )
 
     # Register routes
-    from server.api.routes import chat, knowledge, plugins, status
+    from server.api.routes import chat, knowledge, plugins, status, audio
     app.include_router(chat.router, prefix="/api", tags=["Chat"])
     app.include_router(knowledge.router, prefix="/api/knowledge", tags=["Knowledge"])
     app.include_router(plugins.router, prefix="/api/plugins", tags=["Plugins"])
     app.include_router(status.router, prefix="/api/status", tags=["Status"])
+    app.include_router(audio.router, prefix="/api/audio", tags=["Audio"])
 
     @app.get("/", tags=["Root"])
     async def root():
         return {
             "name": "Dione AI",
-            "version": "0.1.0",
+            "version": "0.2.0",
             "status": "alive",
             "description": "Local Large Action Model Orchestration Engine",
         }

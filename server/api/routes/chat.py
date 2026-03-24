@@ -55,6 +55,10 @@ async def chat_message(req: ChatRequest, request: Request):
     # Store user message in memory
     await memory.add_turn("user", req.message)
 
+    # Record user activity for adaptive heartbeat
+    if hasattr(request.app.state, "heartbeat"):
+        request.app.state.heartbeat.record_user_activity()
+
     # Process through the ReAct engine
     final_response = ""
     tools_used = []
@@ -68,9 +72,7 @@ async def chat_message(req: ChatRequest, request: Request):
             tools_used.append(step.tool_call.tool)
         # Observation steps are internal — skip for REST response
 
-    # Store assistant response in memory
-    if final_response:
-        await memory.add_turn("assistant", final_response)
+    # Note: Assistant response is already stored by engine.process_message()
 
     latency = (time.monotonic() - start) * 1000
 
@@ -157,6 +159,10 @@ async def chat_websocket(websocket: WebSocket):
             # Store user message
             await memory.add_turn("user", content)
 
+            # Record user activity for adaptive heartbeat
+            if hasattr(websocket.app.state, "heartbeat"):
+                websocket.app.state.heartbeat.record_user_activity()
+
             # Process through engine and stream EngineStep events
             full_response = ""
             try:
@@ -206,9 +212,7 @@ async def chat_websocket(websocket: WebSocket):
                     "full_response": full_response,
                 })
 
-                # Store in memory
-                if full_response:
-                    await memory.add_turn("assistant", full_response)
+                # Note: Assistant response is already stored by engine.process_message()
 
             except Exception as e:
                 logger.error(f"Engine error: {e}")

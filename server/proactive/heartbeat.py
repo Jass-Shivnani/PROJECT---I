@@ -71,7 +71,11 @@ class HeartbeatScheduler:
     4. Mood-driven spontaneous interactions
     """
 
-    HEARTBEAT_INTERVAL = 60  # Check every 60 seconds
+    # Adaptive intervals (seconds) based on user activity
+    INTERVAL_ACTIVE = 30       # User active in last 5 min
+    INTERVAL_IDLE = 120        # 5-30 min since last interaction
+    INTERVAL_INACTIVE = 300    # 30-120 min since last interaction
+    INTERVAL_SLEEPING = 900    # 120+ min or outside active hours
 
     def __init__(self, data_dir: str = "data"):
         self._data_dir = Path(data_dir)
@@ -83,6 +87,10 @@ class HeartbeatScheduler:
         self._subscribers: list[Callable[[BeatEvent], Awaitable[None]]] = []
         self._running = False
         self._task: Optional[asyncio.Task] = None
+        
+        # Activity tracking for adaptive intervals
+        self._last_user_activity: float = time.time()
+        self._current_state: str = "active"  # active, idle, inactive, sleeping
         
         # Services injected later
         self._profile_manager = None
@@ -172,14 +180,68 @@ class HeartbeatScheduler:
         logger.info("💓 Heartbeat stopped")
 
     async def _heartbeat_loop(self):
-        """Main background loop — Dione's pulse."""
+        """Main background loop — Dione's pulse with adaptive intervals."""
         while self._running:
             try:
                 await self._tick()
             except Exception as e:
                 logger.error(f"Heartbeat tick error: {e}")
             
-            await asyncio.sleep(self.HEARTBEAT_INTERVAL)
+            interval = self._compute_interval()
+            await asyncio.sleep(interval)
+
+    def record_user_activity(self):
+        """Called when the user sends a message or interacts with Dione."""
+        self._last_user_activity = time.time()
+        self._current_state = "active"
+
+    def _compute_interval(self) -> float:
+        """
+        Determine heartbeat interval based on user activity.
+        Combines real interaction data with profile active hours.
+        """
+        now = time.time()
+        elapsed = now - self._last_user_activity
+        hour = int(datetime.now().strftime("%H"))
+
+        # Check if outside active hours from profile
+        active_hours = []
+        if self._profile_manager and hasattr(self._profile_manager, 'profile'):
+            usage = getattr(self._profile_manager.profile, 'usage', None)
+            if usage:
+                active_hours = getattr(usage, 'active_hours', [])
+
+        outside_active = False
+        if active_hours and len(active_hours) >= 2:
+            # If hour is NOT within ±2 hours of any known active hour
+            outside_active = all(
+                abs(hour - ah) > 2 and abs(hour - ah - 24) > 2 and abs(hour - ah + 24) > 2
+                for ah in active_hours
+            )
+
+        # Determine state
+        if elapsed > 7200 or (elapsed > 3600 and outside_active):  # 2h+ or 1h+ AND outside active hours
+            self._current_state = "sleeping"
+            return self.INTERVAL_SLEEPING
+        elif elapsed > 1800:  # 30+ min
+            self._current_state = "inactive"
+            return self.INTERVAL_INACTIVE
+        elif elapsed > 300:  # 5+ min
+            self._current_state = "idle"
+            return self.INTERVAL_IDLE
+        else:
+            self._current_state = "active"
+            return self.INTERVAL_ACTIVE
+
+    @property
+    def activity_state(self) -> str:
+        """Current user activity state."""
+        return self._current_state
+
+    @property
+    def current_interval(self) -> float:
+        """Current heartbeat interval in seconds."""
+        return self._compute_interval()
 
     async def _tick(self):
         """Single heartbeat tick — check patterns and generate events."""

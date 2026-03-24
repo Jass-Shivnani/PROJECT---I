@@ -119,13 +119,19 @@ class PersonalityEngine:
     def save(self):
         """Persist personality state."""
         try:
+            memories = []
+            for em in self.emotional_memories[-50:]:
+                em_data = asdict(em)
+                sentiment = em_data.get("user_sentiment")
+                if not isinstance(sentiment, str):
+                    em_data["user_sentiment"] = getattr(sentiment, "value", str(sentiment))
+                memories.append(em_data)
+
             data = {
                 "mood": self.mood.to_dict(),
                 "interaction_count": self._interaction_count,
                 "last_interaction": self._last_interaction,
-                "emotional_memories": [
-                    asdict(em) for em in self.emotional_memories[-50:]
-                ],
+                "emotional_memories": memories,
             }
             self._state_path.write_text(
                 json.dumps(data, indent=2), encoding="utf-8"
@@ -180,20 +186,34 @@ class PersonalityEngine:
         """Adjust mood based on time of day — natural rhythm."""
         hour = int(time.strftime("%H"))
         
-        if 6 <= hour < 10:  # Morning
-            self.mood.energy = max(self.mood.energy, 0.6)
-            self.mood.warmth = max(self.mood.warmth, 0.7)
-        elif 10 <= hour < 14:  # Mid-day peak
-            self.mood.energy = max(self.mood.energy, 0.7)
-            self.mood.confidence = max(self.mood.confidence, 0.7)
-        elif 14 <= hour < 18:  # Afternoon
-            self.mood.energy = self.mood.energy * 0.95
-        elif 18 <= hour < 22:  # Evening
-            self.mood.warmth = min(1.0, self.mood.warmth + 0.05)
-            self.mood.playfulness = min(1.0, self.mood.playfulness + 0.05)
-        else:  # Night
-            self.mood.energy = max(0.2, self.mood.energy - 0.1)
-            self.mood.warmth = min(1.0, self.mood.warmth + 0.1)
+        # Gently nudge mood toward time-appropriate values
+        # Using weighted blend instead of max() to prevent saturation
+        blend = 0.05  # How much to shift per call (small = gradual)
+        
+        if 6 <= hour < 10:  # Morning — fresh, warm
+            self.mood.energy += (0.65 - self.mood.energy) * blend
+            self.mood.warmth += (0.7 - self.mood.warmth) * blend
+            self.mood.playfulness += (0.3 - self.mood.playfulness) * blend
+        elif 10 <= hour < 14:  # Mid-day peak — focused, confident
+            self.mood.energy += (0.75 - self.mood.energy) * blend
+            self.mood.confidence += (0.75 - self.mood.confidence) * blend
+            self.mood.playfulness += (0.25 - self.mood.playfulness) * blend
+        elif 14 <= hour < 18:  # Afternoon — slight dip
+            self.mood.energy += (0.5 - self.mood.energy) * blend
+            self.mood.warmth += (0.6 - self.mood.warmth) * blend
+        elif 18 <= hour < 22:  # Evening — relaxed, warmer
+            self.mood.energy += (0.45 - self.mood.energy) * blend
+            self.mood.warmth += (0.7 - self.mood.warmth) * blend
+            self.mood.playfulness += (0.4 - self.mood.playfulness) * blend
+        else:  # Night — calm, warm, quiet
+            self.mood.energy += (0.25 - self.mood.energy) * blend
+            self.mood.warmth += (0.65 - self.mood.warmth) * blend
+            self.mood.playfulness += (0.15 - self.mood.playfulness) * blend
+        
+        # Clamp all values to valid range
+        for attr in ['energy', 'warmth', 'curiosity', 'confidence', 'playfulness']:
+            val = getattr(self.mood, attr)
+            setattr(self.mood, attr, max(0.05, min(0.95, val)))
 
     def _apply_drift(self):
         """Gradually drift mood back toward baseline."""

@@ -257,19 +257,67 @@ class KnowledgeGraph:
         Extract entities and relations from a conversation turn
         and add them to the knowledge graph.
         
-        This is called after every interaction to continuously
-        build the user's personal knowledge graph.
-        
-        TODO: Use the LLM to extract entities/relations via NER
+        Uses lightweight regex-based NER to identify:
+        - Person names (capitalized words in conversational patterns)
+        - Organizations/companies
+        - Dates and temporal references
+        - Topics / domain keywords
+        - URLs and email addresses
         """
-        # For now, this is a placeholder for LLM-based entity extraction
-        # In production, the LLM would parse the conversation to identify:
-        # - New people mentioned
-        # - Events/meetings discussed
-        # - Documents referenced
-        # - Tasks assigned
-        # - Relationships between them
-        pass
+        import re
+        combined = f"{user_message} {assistant_response}"
+        
+        # ── Extract person names ──
+        # Patterns: "tell X", "email X", "meeting with X", "ask X", etc.
+        name_patterns = [
+            r"(?:tell|email|message|call|ask|meet(?:ing)?\s+with|send\s+to|from|contact|ping)\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)",
+            r"(?:my\s+(?:friend|colleague|boss|manager|teacher|professor|mentor|partner))\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)",
+        ]
+        for pattern in name_patterns:
+            for match in re.finditer(pattern, combined):
+                name = match.group(1).strip()
+                if len(name) > 1 and name.lower() not in {"the", "this", "that", "about", "hello"}:
+                    existing = self.find_entities(name=name, entity_type=EntityType.PERSON)
+                    if not existing:
+                        entity = Entity(
+                            id=str(uuid.uuid4())[:8],
+                            name=name,
+                            type=EntityType.PERSON,
+                            metadata={"source": "conversation", "first_mentioned": datetime.now().isoformat()},
+                        )
+                        self.add_entity(entity)
+        
+        # ── Extract email addresses ──
+        emails = re.findall(r'[\w.+-]+@[\w-]+\.[\w.]+', combined)
+        for email in emails:
+            existing = self.find_entities(name=email)
+            if not existing:
+                entity = Entity(
+                    id=str(uuid.uuid4())[:8],
+                    name=email,
+                    type=EntityType.PERSON,
+                    metadata={"email": email, "source": "conversation"},
+                )
+                self.add_entity(entity)
+        
+        # ── Extract topics/projects ──
+        topic_patterns = [
+            r"(?:project|app|website|repo|repository|system)\s+(?:called|named)?\s*[\"']?([A-Za-z][\w-]+)[\"']?",
+            r"working\s+on\s+([A-Za-z][\w-]+)",
+        ]
+        for pattern in topic_patterns:
+            for match in re.finditer(pattern, combined, re.IGNORECASE):
+                topic = match.group(1).strip()
+                if len(topic) > 2:
+                    existing = self.find_entities(name=topic, entity_type=EntityType.PROJECT)
+                    if not existing:
+                        entity = Entity(
+                            id=str(uuid.uuid4())[:8],
+                            name=topic,
+                            type=EntityType.PROJECT,
+                            metadata={"source": "conversation"},
+                        )
+                        self.add_entity(entity)
 
     # ------------------------------------------------------------------
     # Graph analytics

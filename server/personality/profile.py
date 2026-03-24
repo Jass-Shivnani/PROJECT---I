@@ -237,14 +237,16 @@ class UserProfileManager:
         elif any(s in msg_lower for s in expert_signals):
             self.profile.expertise_level = "expert"
 
-        # Detect name (very basic — "I'm X" or "My name is X")
+        # Detect name (case-insensitive — "i'm jass", "my name is Jass", etc.)
         import re
         name_match = re.search(
-            r"(?:i'?m|my name is|call me|i am)\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)",
-            message
+            r"(?:i'?m|my name is|call me|i am)\s+([a-zA-Z]+(?:\s[a-zA-Z]+)?)",
+            message,
+            re.IGNORECASE,
         )
         if name_match and self.profile.name == "User":
-            self.profile.name = name_match.group(1)
+            # Title-case the captured name
+            self.profile.name = name_match.group(1).strip().title()
             logger.info(f"🎯 Learned user name: {self.profile.name}")
 
         # Track tool usage

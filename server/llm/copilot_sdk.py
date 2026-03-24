@@ -1,64 +1,82 @@
 """
 Dione AI — GitHub Copilot SDK Backend
 
-Uses the official GitHub Copilot SDK (github-copilot-sdk) to
-communicate with GitHub Copilot via the Copilot CLI (JSON-RPC).
-
-Authentication uses the logged-in GitHub user (same as VS Code).
-No API key needed — just `copilot` CLI installed and GitHub signed in.
-
-pip install github-copilot-sdk
+Uses the official GitHub Copilot CLI to generate responses.
+Instead of using the buggy CopilotClient (which hangs indefinitely when the CLI 
+demands interactive TOS approval for new models), we use `subprocess` directly 
+so we can intercept errors and present them to the user instantly.
 """
 
 import asyncio
+import re
 import time
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator
 from loguru import logger
 
 from server.llm.adapter import BaseLLMAdapter, LLMRequest, LLMResponse
-from copilot import CopilotClient, PermissionHandler, SessionConfig
-
 
 class CopilotAdapter(BaseLLMAdapter):
     """
-    LLM adapter backed by the GitHub Copilot SDK.
+    LLM adapter backed by the GitHub Copilot SDK CLI executable.
 
-    Uses `send_and_wait()` for reliable request/response,
-    and event callbacks for streaming.
+    Instead of using the buggy `CopilotClient` (which hangs when the CLI requires
+    TOS approval for a new model), we invoke `copilot.exe -p` directly via subprocess.
     """
 
-    def __init__(self, model: str = "claude-sonnet-4.6"):
-        self.model = model
-        self._client: Optional[CopilotClient] = None
-        self._initialized = False
-        self._max_retries = 3
-        logger.info(f"Copilot SDK adapter created: model={self.model}")
+    def __init__(self, model: str = "gpt-5-mini", **kwargs):
+        self.model = self._normalize_model(model)
+        self._cli_path = None
+        logger.info(f"Copilot Subprocess adapter created: model={self.model}")
 
-    async def _ensure_client(self):
-        """Lazily start the CopilotClient (spawns the CLI server)."""
-        if self._initialized and self._client:
-            return
+    def _normalize_model(self, model: str) -> str:
+        aliases = {
+            "gpt-4.1-mini": "gpt-4.1",
+        }
+        normalized = aliases.get(model, model)
+        if normalized != model:
+            logger.warning(f"Copilot model '{model}' is deprecated; using '{normalized}' instead")
+        return normalized
 
-        self._client = CopilotClient({
-            "auto_start": True,
-            "auto_restart": True,
-            "use_logged_in_user": True,
-            "log_level": "warning",
-        })
-        await self._client.start()
-        self._initialized = True
-        logger.info("Copilot SDK client started (CLI JSON-RPC)")
+    def _extract_allowed_models(self, stderr_str: str) -> list[str]:
+        if "Allowed choices are" not in stderr_str:
+            return []
+        choices_part = stderr_str.split("Allowed choices are", 1)[1].strip().rstrip(".")
+        return [m.strip() for m in choices_part.split(",") if m.strip()]
 
-    # ------------------------------------------------------------------
-    # generate() — complete response via send_and_wait()
-    # ------------------------------------------------------------------
+    async def _run_cli(self, cli_path: str, prompt: str, model: str):
+        process = await asyncio.create_subprocess_exec(
+            cli_path, "-p", prompt, "--model", model,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=90.0)
+        return process.returncode, stdout.decode().strip(), stderr.decode().strip()
+
+    def _ensure_cli(self) -> str:
+        """Find the bundled copilot CLI executable."""
+        if self._cli_path:
+            return self._cli_path
+
+        try:
+            from copilot.client import _get_bundled_cli_path
+            self._cli_path = _get_bundled_cli_path()
+            return self._cli_path
+        except ImportError:
+            raise RuntimeError(
+                "github-copilot-sdk is not installed. "
+                "Install with: pip install github-copilot-sdk"
+            )
 
     async def generate(self, request: LLMRequest) -> LLMResponse:
-        """Send messages and return a complete response."""
-        await self._ensure_client()
+        """Send messages to Copilot via subprocess."""
+        try:
+            cli_path = self._ensure_cli()
+        except RuntimeError as e:
+            return LLMResponse(content=f"System Error: {e}", model=self.model)
+
         start = time.monotonic()
 
-        # Separate system prompt from conversation
+        # Extract system prompt and conversation history
         system_content = ""
         conversation_parts = []
         for msg in request.messages:
@@ -73,184 +91,93 @@ class CopilotAdapter(BaseLLMAdapter):
 
         conversation_text = "\n\n".join(conversation_parts)
 
-        # Build prompt — embed system instructions inside the prompt
-        # so the Copilot agent cannot override them.
+        # Build combined prompt
         full_prompt = (
-            f"<<MANDATORY INSTRUCTIONS — FOLLOW EXACTLY>>\n"
+            f"<<MANDATORY INSTRUCTIONS>>\n"
             f"{system_content}\n"
             f"<<END INSTRUCTIONS>>\n\n"
             f"{conversation_text}\n\n"
             f"Respond with ONLY a JSON object. No markdown, no extra text."
         )
 
-        # Build session config
-        session_config: SessionConfig = {
-            "model": self.model,
-            "on_permission_request": PermissionHandler.approve_all,
-        }
+        try:
+            returncode, stdout_str, stderr_str = await self._run_cli(cli_path, full_prompt, self.model)
 
-        # Retry loop for transient session failures
-        last_error = None
-        for attempt in range(1, self._max_retries + 1):
-            session = None
-            try:
-                session = await self._client.create_session(session_config)
+            if returncode != 0:
+                allowed = self._extract_allowed_models(stderr_str)
+                if allowed:
+                    fallback = "gpt-4.1" if "gpt-4.1" in allowed else allowed[0]
+                    if fallback != self.model:
+                        logger.warning(f"Copilot model '{self.model}' rejected by CLI; retrying with '{fallback}'")
+                        self.model = fallback
+                        returncode, stdout_str, stderr_str = await self._run_cli(cli_path, full_prompt, self.model)
 
-                # Use send_and_wait for reliable request/response
-                result = await session.send_and_wait(
-                    {"prompt": full_prompt},
-                    timeout=90.0,
-                )
-
-                if result is None:
-                    raise RuntimeError("No response from Copilot SDK (timeout or empty)")
-
-                # Extract content from the result
-                content = ""
-                if hasattr(result, "data") and hasattr(result.data, "content"):
-                    content = result.data.content or ""
-
-                if not content:
-                    raise RuntimeError("Empty response content from Copilot SDK")
-
-                latency = (time.monotonic() - start) * 1000
-
-                # Extract token counts if available
-                input_tokens = 0
-                output_tokens = 0
-                if hasattr(result, "data"):
-                    input_tokens = getattr(result.data, "input_tokens", 0) or 0
-                    output_tokens = getattr(result.data, "output_tokens", 0) or 0
-
+            if returncode != 0:
+                logger.error(f"Copilot CLI failed: {stderr_str}")
                 return LLMResponse(
-                    content=content,
+                    content=(
+                        f"Copilot Error: {stderr_str}\n\n"
+                        f"(If it asks you to run interactively, please open terminal and run: `copilot --model {self.model}` once to agree to terms)"
+                    ),
                     model=self.model,
-                    prompt_tokens=input_tokens,
-                    completion_tokens=output_tokens,
-                    total_tokens=input_tokens + output_tokens,
-                    finish_reason="stop",
-                    latency_ms=latency,
                 )
 
-            except Exception as e:
-                last_error = e
-                logger.warning(
-                    f"Copilot SDK attempt {attempt}/{self._max_retries} "
-                    f"failed: {e}"
-                )
-                if attempt < self._max_retries:
-                    await asyncio.sleep(1.0 * attempt)
-            finally:
-                if session:
-                    try:
-                        await session.destroy()
-                    except Exception:
-                        pass
+            if not stdout_str:
+                return LLMResponse(content="Empty response from Copilot.", model=self.model)
+                
+            latency = (time.monotonic() - start) * 1000
 
-        latency = (time.monotonic() - start) * 1000
-        logger.error(f"Copilot SDK all {self._max_retries} attempts failed: {last_error}")
-        raise RuntimeError(f"Copilot SDK error after {self._max_retries} retries: {last_error}")
+            # Find the JSON block in stdout_str (in case Copilot added markdown)
+            content = stdout_str
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0].strip()
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0].strip()
 
-    # ------------------------------------------------------------------
-    # stream() — token-by-token streaming via event callbacks
-    # ------------------------------------------------------------------
+            content = re.sub(r"^```(?:json)?\s*", "", content).strip()
+            content = re.sub(r"\s*```$", "", content).strip()
+
+            return LLMResponse(
+                content=content,
+                model=self.model,
+                prompt_tokens=0,
+                completion_tokens=0,
+                total_tokens=0,
+                finish_reason="stop",
+                latency_ms=latency,
+            )
+
+        except asyncio.TimeoutError:
+            logger.error("Copilot CLI subprocess timed out after 90s")
+            return LLMResponse(content="Copilot timed out after 90 seconds.", model=self.model)
+        except Exception as e:
+            logger.error(f"Error running Copilot CLI: {e}")
+            return LLMResponse(content=f"Copilot Error: {e}", model=self.model)
 
     async def stream(self, request: LLMRequest) -> AsyncGenerator[str, None]:
-        """Stream tokens as they arrive."""
-        await self._ensure_client()
-
-        # Separate system message
-        system_content = ""
-        conversation_parts = []
-        for msg in request.messages:
-            if msg.role == "system":
-                system_content = msg.content
-            else:
-                conversation_parts.append(msg.content)
-
-        full_prompt = "\n\n".join(conversation_parts)
-
-        session_config: SessionConfig = {
-            "model": self.model,
-            "streaming": True,
-            "on_permission_request": PermissionHandler.approve_all,
-        }
-        if system_content:
-            session_config["system_message"] = {"content": system_content}
-
-        session = await self._client.create_session(session_config)
-
-        # Use a queue to bridge event callbacks → async generator
-        queue: asyncio.Queue = asyncio.Queue()
-        SENTINEL = object()
-
-        def on_event(event):
-            etype = event.type.value if hasattr(event.type, "value") else str(event.type)
-            if etype == "assistant.message_delta":
-                delta = getattr(event.data, "delta_content", "") or ""
-                if delta:
-                    queue.put_nowait(delta)
-            elif etype in ("session.idle", "assistant.message"):
-                queue.put_nowait(SENTINEL)
-            elif etype == "error":
-                queue.put_nowait(SENTINEL)
-
-        session.on(on_event)
-        await session.send({"prompt": full_prompt})
-
-        try:
-            while True:
-                item = await asyncio.wait_for(queue.get(), timeout=60.0)
-                if item is SENTINEL:
-                    break
-                yield item
-        finally:
-            try:
-                await session.destroy()
-            except Exception:
-                pass
-
-    # ------------------------------------------------------------------
-    # Utility methods
-    # ------------------------------------------------------------------
+        # Subprocess `copilot -p` doesn't stream well natively, so we yield atomic
+        res = await self.generate(request)
+        yield res.content
 
     async def health_check(self) -> bool:
         """Verify the Copilot CLI backend is reachable."""
         try:
-            await self._ensure_client()
+            self._ensure_cli()
             return True
         except Exception as e:
             logger.error(f"Copilot SDK health check failed: {e}")
             return False
 
     async def list_models(self) -> list[str]:
-        """List available models via Copilot CLI."""
-        try:
-            await self._ensure_client()
-            models = await self._client.list_models()
-            return [
-                m.id if hasattr(m, "id") else str(m)
-                for m in models
-            ]
-        except Exception:
-            return [self.model]
+        return [self.model, "claude-sonnet-4.6", "gpt-4.1"]
 
     async def get_model_info(self) -> dict:
-        """Get info about the current model."""
         return {
             "model": self.model,
-            "provider": "github-copilot-sdk",
+            "provider": "github-copilot-subprocess",
             "type": "cloud",
             "auth": "github-signed-in-user",
         }
 
     async def close(self):
-        """Stop the Copilot CLI server."""
-        if self._client:
-            try:
-                await self._client.stop()
-            except Exception:
-                pass
-            self._client = None
-            self._initialized = False
-            logger.info("Copilot SDK client stopped")
+        pass

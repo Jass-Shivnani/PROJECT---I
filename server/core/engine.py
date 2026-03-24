@@ -207,6 +207,42 @@ class DioneEngine:
         if proactive_context:
             sections.append(f"\n## Proactive Awareness\n{proactive_context}")
 
+        # ── Gradual personalisation — learn about the user over time ──
+        if self._profile_manager:
+            missing_fields = []
+            profile = self._profile_manager.profile
+            if getattr(profile, 'name', 'User') == 'User':
+                missing_fields.append("what their name is — use a phrase like 'By the way, what should I call you?'")
+            if getattr(profile, 'profession', 'unknown') in ('unknown', ''):
+                missing_fields.append("what they do for work — ask casually like 'What field do you work in?'")
+            if not getattr(profile, 'interests', []):
+                missing_fields.append("what their interests are — 'What kind of things are you working on these days?'")
+
+            if missing_fields:
+                # Only ask one question per response to avoid overwhelming
+                learning_q = missing_fields[0]
+                sections.append(
+                    f"\n## Get to Know the User\n"
+                    f"You don't know much about this user yet. "
+                    f"After answering their question, NATURALLY ask them {learning_q}\n"
+                    f"Do NOT ask multiple questions — just ONE. Keep it casual and conversational."
+                )
+
+        # ── Profession knowledge context ──
+        if hasattr(self, '_profession_knowledge') and self._profession_knowledge:
+            try:
+                # Get context relevant to the current conversation
+                last_msg = ""
+                if hasattr(self, '_context_manager'):
+                    history = self._context_manager.get_recent_messages(1)
+                    if history:
+                        last_msg = history[-1].get("content", "")
+                profession_ctx = self._profession_knowledge.get_context_for_engine(last_msg)
+                if profession_ctx:
+                    sections.append(f"\n{profession_ctx}")
+            except Exception as e:
+                logger.warning(f"Failed to get profession context: {e}")
+
         sections.append(f"""
 ## Available Tools
 

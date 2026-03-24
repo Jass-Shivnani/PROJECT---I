@@ -51,30 +51,47 @@ async def system_info(request: Request):
     memory = request.app.state.memory
     knowledge = request.app.state.knowledge
 
-    memory_stats = await memory.get_stats()
-    kg_stats = knowledge.get_statistics()
+    # Fault-tolerant stat collection
+    try:
+        memory_stats = await memory.get_stats()
+    except Exception:
+        memory_stats = {"error": "unavailable"}
+
+    try:
+        kg_stats = knowledge.get_stats()
+    except Exception:
+        kg_stats = {"error": "unavailable"}
 
     # Personality state from new system
     mood_data = {}
     user_data = {}
     if hasattr(request.app.state, "personality"):
-        mood_data = request.app.state.personality.mood.to_dict()
+        try:
+            mood_data = request.app.state.personality.mood.to_dict()
+        except Exception:
+            mood_data = {}
     if hasattr(request.app.state, "profile"):
-        p = request.app.state.profile.profile
-        user_data = {
-            "name": p.name,
-            "profession": p.profession,
-            "expertise": p.expertise_level,
-            "interests": p.interests,
-            "total_messages": p.total_messages,
-        }
+        try:
+            p = request.app.state.profile.profile
+            user_data = {
+                "name": p.name,
+                "profession": p.profession,
+                "expertise": p.expertise_level,
+                "interests": p.interests,
+                "total_messages": p.total_messages,
+            }
+        except Exception:
+            user_data = {}
+
+    # Uptime
+    start_time = getattr(request.app.state, "start_time", time.time())
+    uptime = time.time() - start_time
 
     return {
-        "dione": {
-            "version": "0.1.0",
-            "mood": mood_data,
-            "user": user_data,
-        },
+        "version": "0.2.0",
+        "uptime": uptime,
+        "mood": mood_data,
+        "user": user_data,
         "llm": {
             "model": settings.llm.model,
             "backend": settings.llm.backend,
@@ -125,3 +142,17 @@ async def get_heartbeat_events(request: Request):
         events = await request.app.state.heartbeat.get_pending_events()
         return {"events": [e.to_dict() for e in events]}
     return {"events": []}
+
+
+@router.get("/heartbeat")
+async def get_heartbeat_status(request: Request):
+    """Get heartbeat scheduler status including adaptive polling state."""
+    if hasattr(request.app.state, "heartbeat"):
+        hb = request.app.state.heartbeat
+        return {
+            "running": hb._running,
+            "activity_state": hb.activity_state,
+            "current_interval_seconds": hb.current_interval,
+            "patterns_count": len(hb.patterns),
+        }
+    return {"running": False}

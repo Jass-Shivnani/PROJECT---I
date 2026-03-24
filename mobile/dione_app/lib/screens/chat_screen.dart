@@ -252,49 +252,59 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildEmptyState(BuildContext context) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Show the mood orb as the greeting
-          const MoodOrb(size: 100, showLabel: true),
-          const SizedBox(height: 24),
-          Text(
-            'Hey! I\'m Dione.',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Ask me anything or tell me to do something.',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Theme.of(context)
-                      .colorScheme
-                      .onSurface
-                      .withOpacity(0.5),
-                ),
-          ),
-          const SizedBox(height: 24),
-          // Quick action chips
-          Wrap(
-            spacing: 8,
-            children: [
-              ActionChip(
-                label: const Text('What can you do?'),
-                onPressed: () {
-                  _controller.text = 'What can you do?';
-                  _sendMessage();
-                },
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Show the mood orb as the greeting
+            const MoodOrb(size: 100, showLabel: true),
+            const SizedBox(height: 24),
+            Text(
+              'Hey! I\'m Dione.',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your local AI assistant that remembers and acts.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withOpacity(0.5),
+                  ),
+            ),
+            const SizedBox(height: 32),
+            // Quick action chips in a grid
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  _quickChip(context, '💡', 'What can you do?', 'What can you do?'),
+                  _quickChip(context, '🌙', 'How are you?', 'How are you feeling right now?'),
+                  _quickChip(context, '📂', 'List my files', 'List the files on my desktop'),
+                  _quickChip(context, '🔍', 'Search the web', 'Search the web for latest AI news'),
+                  _quickChip(context, '📝', 'Summarize', 'Can you help me write a summary?'),
+                  _quickChip(context, '⚡', 'System info', 'Tell me about my system'),
+                ],
               ),
-              ActionChip(
-                label: const Text('How are you feeling?'),
-                onPressed: () {
-                  _controller.text = 'How are you feeling right now?';
-                  _sendMessage();
-                },
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  Widget _quickChip(BuildContext context, String emoji, String label, String message) {
+    return ActionChip(
+      avatar: Text(emoji, style: const TextStyle(fontSize: 14)),
+      label: Text(label, style: const TextStyle(fontSize: 13)),
+      onPressed: () {
+        _controller.text = message;
+        _sendMessage();
+      },
     );
   }
 

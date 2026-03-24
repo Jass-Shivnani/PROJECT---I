@@ -31,8 +31,14 @@ class Permission(enum.Enum):
     # Core
     READ_FILES = "read_files"
     WRITE_FILES = "write_files"
+    FILE_READ = "file_read"
+    FILE_WRITE = "file_write"
     NETWORK_ACCESS = "network_access"
     SYSTEM_COMMANDS = "system_commands"
+    MEMORY_READ = "memory_read"
+    
+    # Integration
+    INTEGRATION_CONNECT = "integration_connect"
     
     # Google Services
     GOOGLE_DRIVE = "google_drive"

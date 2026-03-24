@@ -1,0 +1,70 @@
+{
+  "assistant_name": {
+    "answer": "No dione is the default",
+    "answered_at": "2026-03-24T19:27:43.090269"
+  },
+  "onboarding_style": {
+    "answer": "b",
+    "answered_at": "2026-03-24T19:28:13.932912"
+  },
+  "onboarding_questions": {
+    "answer": "whatever it feels, necessary",
+    "answered_at": "2026-03-24T19:29:31.661169"
+  },
+  "profession_data": {
+    "answer": "i think web search? You tell is there any source that can provide with this? Also it should do this thing when the user is inactive, not while user is using the thing. also there should be limit to the knowledge gathering if its unable to do it, its fine.",
+    "answered_at": "2026-03-24T19:30:48.983952"
+  },
+  "profession_update_freq": {
+    "answer": "c",
+    "answered_at": "2026-03-24T19:31:01.967794"
+  },
+  "priority_integrations": {
+    "answer": "1 3 and i believe more google apps, like google drive, docs, sheets,etc.",
+    "answered_at": "2026-03-24T19:31:59.322313"
+  },
+  "gmail_scope": {
+    "answer": "everything, auto respond should be user defined. We need it to be customizable. It should be able to auto reply if the user wants. This is strict.",
+    "answered_at": "2026-03-24T19:32:55.972188"
+  },
+  "social_monitoring": {
+    "answer": "d",
+    "answered_at": "2026-03-24T19:33:14.062333"
+  },
+  "heartbeat_sleep": {
+    "answer": "c",
+    "answered_at": "2026-03-24T19:33:33.063574"
+  },
+  "heartbeat_intervals": {
+    "answer": "the agent decides this",
+    "answered_at": "2026-03-24T19:33:46.941273"
+  },
+  "gemini_audio": {
+    "answer": "c",
+    "answered_at": "2026-03-24T19:34:00.651743"
+  },
+  "gemini_api_key": {
+    "answer": "idk",
+    "answered_at": "2026-03-24T19:34:06.929903"
+  },
+  "llm_backend": {
+    "answer": "d i want the user to be able to change all this in the settings. This should be done using settins in the cli",
+    "answered_at": "2026-03-24T19:34:57.611329"
+  },
+  "security_priority": {
+    "answer": "a",
+    "answered_at": "2026-03-24T19:35:32.951394"
+  },
+  "next_work": {
+    "answer": "a>b>c>d>e also i want you to make a great onboarding experience, on the server side. The user should have a proper menu based thing, or we can just make it web based. I prefer cli. The user should be able to setup the agent using their own llm, this can be online using openai api keys/gemini/copilot cli/idk more types of api's or offline using ollama models.",
+    "answered_at": "2026-03-24T19:37:58.432529"
+  },
+  "deadline": {
+    "answer": "tommorow",
+    "answered_at": "2026-03-24T19:38:04.092205"
+  },
+  "anything_else": {
+    "answer": "i dont understand the setup process, it feels to complicated to use. it should have a better cli experience",
+    "answered_at": "2026-03-24T19:38:37.692055"
+  }
+}

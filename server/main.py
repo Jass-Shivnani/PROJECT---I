@@ -125,8 +125,37 @@ def check():
 @app.command()
 def version():
     """Show Dione AI version."""
-    typer.echo("Dione AI v0.1.0")
+    typer.echo("Dione AI v0.2.0")
+
+
+@app.command()
+def setup():
+    """Run the interactive setup wizard."""
+    from server.cli.setup import run_setup
+    run_setup()
+
+
+@app.command()
+def settings():
+    """Open the settings menu to view/modify configuration."""
+    from server.cli.settings_menu import run_settings
+    run_settings()
+
+
+def _auto_detect_first_run():
+    """If no .env exists, suggest running setup."""
+    env_path = Path(".env")
+    if not env_path.exists():
+        from rich.console import Console
+        console = Console()
+        console.print(
+            "\n  [yellow]⚠ No .env file found![/yellow]\n"
+            "  Looks like this is your first time running Dione.\n"
+            "  Run the setup wizard first:\n\n"
+            "    [cyan]python -m server.main setup[/cyan]\n"
+        )
 
 
 if __name__ == "__main__":
+    _auto_detect_first_run()
     app()
