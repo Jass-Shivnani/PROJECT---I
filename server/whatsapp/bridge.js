@@ -28,6 +28,7 @@ let currentQRDataUrl = null;
 let currentQRTerminal = null;
 let connectionStatus = "disconnected";
 let reconnectAttempts = 0;
+const selfIdentifiers = new Set();
 const MAX_RECONNECT = 10;
 const RECONNECT_BASE_MS = 2000;
 
@@ -39,10 +40,25 @@ function normalizeJidNumber(jid = "") {
     .trim();
 }
 
+function addSelfIdentifier(jid = "") {
+  const normalized = normalizeJidNumber(jid);
+  if (normalized) selfIdentifiers.add(normalized);
+}
+
+function refreshSelfIdentifiersFromUser(me = null) {
+  if (!me) return;
+  addSelfIdentifier(me.id || "");
+  addSelfIdentifier(me.lid || "");
+}
+
 function isSelfChat(senderJid = "") {
-  const selfNumber = normalizeJidNumber(sock?.user?.id || "");
   const chatNumber = normalizeJidNumber(senderJid);
-  return !!selfNumber && selfNumber === chatNumber;
+  if (!chatNumber) return false;
+
+  // Refresh from live socket user when available
+  refreshSelfIdentifiersFromUser(sock?.user || null);
+
+  return selfIdentifiers.has(chatNumber);
 }
 
 function shouldProcessForReply(senderJid, isGroup) {
@@ -69,6 +85,9 @@ async function connectWhatsApp() {
 
   const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
   const { version } = await fetchLatestBaileysVersion();
+
+  // Prime self identifiers from persisted auth state (includes LID for account)
+  refreshSelfIdentifiersFromUser(state?.creds?.me || null);
 
   connectionStatus = "connecting";
   currentQR = null;
@@ -112,6 +131,7 @@ async function connectWhatsApp() {
       currentQRTerminal = null;
       reconnectAttempts = 0;
       const me = sock.user;
+      refreshSelfIdentifiersFromUser(me || null);
       console.log(`[whatsapp-bridge] Connected as ${me?.id || "unknown"}`);
     }
 
@@ -142,6 +162,7 @@ async function connectWhatsApp() {
 
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     if (!["notify", "append"].includes(type)) return;
+    console.log(`[whatsapp-bridge] upsert type=${type} count=${Array.isArray(messages) ? messages.length : 0}`);
 
     for (const msg of messages) {
       if (msg.key.remoteJid === "status@broadcast") continue;
@@ -161,12 +182,16 @@ async function connectWhatsApp() {
 
       // Ignore device-originated outbound messages except self-chat commands.
       if (msg.key.fromMe && !isSelfChat(senderJid)) {
+        console.log(`[whatsapp-bridge] skip fromMe non-self chat=${senderJid}`);
         continue;
       }
 
       if (!shouldProcessForReply(senderJid, isGroup)) {
+        console.log(`[whatsapp-bridge] skip policy chat=${senderJid} group=${isGroup}`);
         continue;
       }
+
+      console.log(`[whatsapp-bridge] inbound accepted chat=${senderJid} fromMe=${!!msg.key.fromMe} textLen=${text.trim().length}`);
 
       try {
         const payload = {
@@ -184,8 +209,11 @@ async function connectWhatsApp() {
           body: JSON.stringify(payload),
         });
 
+        console.log(`[whatsapp-bridge] forwarded to dione status=${resp.status}`);
+
         if (resp.ok) {
           const data = await resp.json();
+          console.log(`[whatsapp-bridge] dione reply present=${Boolean(data.reply)}`);
           if (data.reply) {
             await sock.readMessages([msg.key]);
             await sock.sendPresenceUpdate("composing", senderJid);
