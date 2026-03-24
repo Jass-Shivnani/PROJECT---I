@@ -18,6 +18,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _urlController = TextEditingController();
   Map<String, dynamic> _serverInfo = {};
   Map<String, dynamic> _personality = {};
+  Map<String, dynamic> _integrations = {};
   bool _loadingInfo = false;
   String? _connectionError;
 
@@ -56,6 +57,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             .timeout(const Duration(seconds: 5));
         if (personalityRes.statusCode == 200) {
           _personality = jsonDecode(personalityRes.body);
+        }
+      } catch (_) {}
+
+      try {
+        final integrationsRes = await http
+            .get(Uri.parse('$url/api/integrations'))
+            .timeout(const Duration(seconds: 5));
+        if (integrationsRes.statusCode == 200) {
+          _integrations = jsonDecode(integrationsRes.body);
         }
       } catch (_) {}
 
@@ -104,6 +114,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSectionHeader(context, Icons.psychology_outlined, 'Personality'),
           const SizedBox(height: 12),
           _buildPersonalityCard(context),
+
+          const SizedBox(height: 24),
+
+          // ── Integrations Section ──
+          _buildSectionHeader(context, Icons.extension_outlined, 'Integrations'),
+          const SizedBox(height: 12),
+          _buildIntegrationsCard(context),
 
           const SizedBox(height: 24),
 
@@ -354,6 +371,69 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildIntegrationsCard(BuildContext context) {
+    if (_integrations.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Text(
+            'No integration data yet',
+            style: TextStyle(color: Theme.of(context).colorScheme.onSurface.withOpacity(0.5)),
+          ),
+        ),
+      );
+    }
+
+    final total = _integrations['total'] ?? 0;
+    final connected = _integrations['connected'] ?? 0;
+    final items = (_integrations['integrations'] as List<dynamic>? ?? const []);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _infoRow('Connected', '$connected / $total'),
+            const SizedBox(height: 8),
+            for (final item in items.take(5))
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${item['name'] ?? item['id']}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      '${item['status'] ?? 'unknown'}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: (item['status'] == 'connected')
+                            ? Colors.green
+                            : Theme.of(context).colorScheme.onSurface.withOpacity(0.7),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 8),
+            Text(
+              'Manage login/permissions from CLI: dione integrations',
+              style: TextStyle(
+                fontSize: 12,
+                color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

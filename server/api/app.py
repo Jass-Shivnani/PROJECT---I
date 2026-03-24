@@ -28,6 +28,7 @@ async def lifespan(app: FastAPI):
     from server.knowledge.graph import KnowledgeGraph
     from server.sentiment.analyzer import SentimentAnalyzer
     from server.plugins.registry import PluginRegistry
+    from server.plugins.integrations import create_default_registry
     from server.core.engine import DioneEngine
     from server.personality.profile import UserProfileManager
     from server.personality.engine import PersonalityEngine
@@ -123,6 +124,11 @@ async def lifespan(app: FastAPI):
     engine.set_heartbeat(heartbeat)
     engine.set_ui_builder(ui_builder)
 
+    # 12. Integrations (Gmail, Drive, etc.)
+    logger.info("Initializing integrations...")
+    integrations = create_default_registry(data_dir="data")
+    engine.set_integrations(integrations)
+
     # Start the heartbeat (background task)
     await heartbeat.start()
 
@@ -138,6 +144,7 @@ async def lifespan(app: FastAPI):
     app.state.personality = personality
     app.state.heartbeat = heartbeat
     app.state.ui_builder = ui_builder
+    app.state.integrations = integrations
 
     logger.info("=" * 50)
     logger.info("    DIONE AI — Ready!")
@@ -180,10 +187,11 @@ def create_app() -> FastAPI:
     )
 
     # Register routes
-    from server.api.routes import chat, knowledge, plugins, status, audio
+    from server.api.routes import chat, knowledge, plugins, status, audio, integrations
     app.include_router(chat.router, prefix="/api", tags=["Chat"])
     app.include_router(knowledge.router, prefix="/api/knowledge", tags=["Knowledge"])
     app.include_router(plugins.router, prefix="/api/plugins", tags=["Plugins"])
+    app.include_router(integrations.router, prefix="/api/integrations", tags=["Integrations"])
     app.include_router(status.router, prefix="/api/status", tags=["Status"])
     app.include_router(audio.router, prefix="/api/audio", tags=["Audio"])
 

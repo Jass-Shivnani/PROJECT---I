@@ -92,6 +92,7 @@ class DioneEngine:
         # These will be injected after initialization
         self._llm_adapter = None
         self._plugin_registry = None
+        self._integration_registry = None
         self._knowledge_graph = None
         self._sentiment_engine = None
         self._memory_manager = None
@@ -123,6 +124,11 @@ class DioneEngine:
         """Inject the knowledge graph."""
         self._knowledge_graph = knowledge_graph
         logger.info("Knowledge graph connected")
+
+    def set_integrations(self, integration_registry):
+        """Inject integration registry (Gmail/Drive/etc)."""
+        self._integration_registry = integration_registry
+        logger.info("Integration registry connected")
 
     def set_sentiment_engine(self, sentiment_engine):
         """Inject the sentiment engine."""
@@ -163,6 +169,16 @@ class DioneEngine:
         tools_schema = []
         if self._plugin_registry:
             tools_schema = self._plugin_registry.get_tools_schema()
+
+        # Add integration tools to the model context
+        if self._integration_registry:
+            for integration_tool in self._integration_registry.get_all_tools():
+                tools_schema.append({
+                    "name": integration_tool.get("name", ""),
+                    "description": integration_tool.get("description", ""),
+                    "parameters": integration_tool.get("parameters", {}),
+                    "requires_confirmation": False,
+                })
 
         tools_json = json.dumps(tools_schema, indent=2)
 
@@ -556,17 +572,33 @@ Respond with a JSON object:
     async def _execute_tool(self, tool_call: ToolCall) -> Observation:
         """Execute a tool call through the plugin registry."""
         if not self._plugin_registry:
-            return Observation(
-                tool=tool_call.tool,
-                success=False,
-                result="",
-                error="No plugin registry available",
-            )
+            if not self._integration_registry:
+                return Observation(
+                    tool=tool_call.tool,
+                    success=False,
+                    result="",
+                    error="No plugin/integration registry available",
+                )
 
         try:
-            result = await self._plugin_registry.execute(
-                tool_call.tool, tool_call.params
-            )
+            if self._plugin_registry and tool_call.tool in self._plugin_registry.tools:
+                result = await self._plugin_registry.execute(
+                    tool_call.tool, tool_call.params
+                )
+            elif self._integration_registry and self._integration_registry.has_tool(tool_call.tool):
+                result = await self._integration_registry.execute_tool(
+                    tool_call.tool, tool_call.params
+                )
+            else:
+                return Observation(
+                    tool=tool_call.tool,
+                    success=False,
+                    result="",
+                    error=(
+                        f"Tool '{tool_call.tool}' not found. "
+                        "If this is an integration tool, run: dione integrations"
+                    ),
+                )
             return Observation(
                 tool=tool_call.tool,
                 success=True,

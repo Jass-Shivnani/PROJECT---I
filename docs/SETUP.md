@@ -347,29 +347,62 @@ While the app is running:
 
 ## 🔌 Part 3: Configure Plugins (Optional)
 
+### Integration Manager (Recommended)
+
+Use Dione's built-in integration manager from CLI:
+
+```bash
+dione integrations list
+dione integrations grant google_mail
+dione integrations connect google_mail
+
+dione integrations grant google_drive
+dione integrations connect google_drive
+```
+
+- `google_mail` uses Gmail address + App Password (2FA required).
+- `google_drive` uses OAuth client JSON (`data/credentials/google_client_secret.json`) and opens browser auth.
+- Check status from mobile Settings or API: `GET /api/integrations`.
+
 ### Gmail Integration
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create a new project
-3. Enable Gmail API
-4. Create OAuth 2.0 credentials (type: Web Application)
-5. Download credentials as JSON
-6. Save to: `data/credentials/gmail.json`
-7. Add to `.env`:
-   ```env
-   GMAIL_CLIENT_ID=your-client-id.apps.googleusercontent.com
-   GMAIL_CLIENT_SECRET=your-secret
+1. Enable 2-Step Verification on your Google account.
+2. Generate a Gmail App Password.
+3. Run:
+   ```bash
+   dione integrations connect google_mail
    ```
+4. Enter Gmail address + App Password when prompted.
+
+You can now use tools: `gmail_read`, `gmail_search`, `gmail_send`, `gmail_unread_count`.
+
+### Google Drive Integration
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create OAuth client credentials for Desktop App.
+3. Download JSON and save as: `data/credentials/google_client_secret.json`
+4. Run:
+   ```bash
+   dione integrations connect google_drive
+   ```
+5. Complete browser OAuth flow.
+
+You can now use tools: `google_drive_search`, `google_drive_read`.
 
 ### WhatsApp Integration
 
-1. Get WhatsApp Business Account & Phone Number ID
-2. Generate API token from Meta for Developers
-3. Add to `.env`:
-   ```env
-   WHATSAPP_PHONE_ID=your-phone-id
-   WHATSAPP_API_TOKEN=your-access-token
-   ```
+Use the WhatsApp Web bridge (no Business API required):
+
+```bash
+dione integrations connect whatsapp
+dione integrations sync whatsapp
+```
+
+- This starts a local Node.js bridge on port `8901`.
+- Fetch QR/status from API:
+   - `GET /api/integrations/whatsapp/qr`
+   - `POST /api/integrations/whatsapp/sync`
+- Scan the QR in WhatsApp mobile app to link your account.
 
 ---
 

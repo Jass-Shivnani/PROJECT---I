@@ -33,6 +33,7 @@ import signal
 import subprocess
 import sys
 import time
+import asyncio
 from pathlib import Path
 
 try:
@@ -217,6 +218,124 @@ def start(
     table.add_row("Server", f"{_host}:{_port}")
     table.add_row("Mode", "Verbose" if verbose else ("Debug" if debug else "Background"))
     console.print(table)
+
+
+@app.command()
+def integrations(
+    action: str = typer.Argument("list", help="Action: list, connect, disconnect, sync, grant"),
+    integration_id: str = typer.Argument("", help="Integration id (google_mail, google_drive, etc.)"),
+):
+    """Manage external integrations (Gmail, Drive, etc.) from CLI."""
+    from rich.prompt import Prompt
+    from server.plugins.integrations import create_default_registry
+
+    registry = create_default_registry(data_dir="data")
+
+    if action == "list":
+        table = Table(title="Integrations", box=box.ROUNDED, border_style="cyan")
+        table.add_column("ID", style="cyan")
+        table.add_column("Name")
+        table.add_column("Status")
+        table.add_column("Permissions")
+        for item in registry.list_integrations():
+            perms = registry.get_integration(item["id"]).REQUIRED_PERMISSIONS
+            table.add_row(
+                item["id"],
+                item["name"],
+                item["status"],
+                ", ".join(p.value for p in perms),
+            )
+        console.print(table)
+        console.print("[dim]Use: dione integrations connect <id>[/dim]")
+        return
+
+    if not integration_id:
+        console.print("[red]Integration id is required for this action.[/red]")
+        console.print("[dim]Example: dione integrations connect google_mail[/dim]")
+        return
+
+    integration = registry.get_integration(integration_id)
+    if not integration:
+        console.print(f"[red]Unknown integration: {integration_id}[/red]")
+        return
+
+    if action == "grant":
+        result = registry.grant_permissions(integration_id)
+        if result["failed"]:
+            console.print(f"[yellow]Partial grant. Failed: {', '.join(result['failed'])}[/yellow]")
+        else:
+            console.print(f"[green]Granted permissions for {integration_id}[/green]")
+        return
+
+    if action == "connect":
+        # Always grant required permissions first
+        registry.grant_permissions(integration_id)
+
+        params = {}
+        if integration_id == "google_mail":
+            console.print("[bold]Gmail login (App Password)[/bold]")
+            console.print("[dim]Use Google account with 2FA + App Password.[/dim]")
+            params["email"] = Prompt.ask("Gmail address")
+            params["app_password"] = Prompt.ask("Gmail App Password", password=True)
+        elif integration_id == "google_drive":
+            console.print("[bold]Google Drive OAuth login[/bold]")
+            console.print("[dim]Provide OAuth client secret JSON from Google Cloud Console.[/dim]")
+            params["client_secret_path"] = Prompt.ask(
+                "Path to OAuth client JSON",
+                default="data/credentials/google_client_secret.json",
+            )
+        elif integration_id == "whatsapp":
+            console.print("[bold]WhatsApp Web bridge login[/bold]")
+            console.print("[dim]This starts a local Node.js bridge and generates QR for WhatsApp linking.[/dim]")
+            params["dione_port"] = int(Prompt.ask("Dione port", default="8900"))
+            params["bridge_port"] = int(Prompt.ask("Bridge port", default="8901"))
+        else:
+            raw = Prompt.ask("Optional JSON params", default="{}")
+            try:
+                params = json.loads(raw)
+            except Exception:
+                params = {}
+
+        result = asyncio.run(registry.connect(integration_id, params))
+        if result.get("success"):
+            console.print(f"[green]Connected: {integration_id}[/green]")
+            sync_result = asyncio.run(registry.sync(integration_id))
+            if sync_result.get("success"):
+                console.print("[green]Initial sync complete.[/green]")
+                if integration_id == "whatsapp":
+                    integration_obj = registry.get_integration("whatsapp")
+                    qr_data = asyncio.run(integration_obj.get_qr()) if integration_obj and hasattr(integration_obj, "get_qr") else {}
+                    status_value = qr_data.get("status", "unknown") if isinstance(qr_data, dict) else "unknown"
+                    console.print(f"[cyan]WhatsApp status:[/cyan] {status_value}")
+                    if isinstance(qr_data, dict) and qr_data.get("qr"):
+                        console.print("[yellow]QR available. Open /api/integrations/whatsapp/qr or mobile settings to scan.[/yellow]")
+                    else:
+                        console.print("[yellow]No QR yet. Run: dione integrations sync whatsapp (or wait a few seconds).[/yellow]")
+            else:
+                console.print(f"[yellow]Connected but sync failed: {sync_result.get('error', 'unknown')}[/yellow]")
+        else:
+            console.print(f"[red]Connect failed: {result.get('error', 'unknown error')}[/red]")
+        return
+
+    if action == "disconnect":
+        result = asyncio.run(registry.disconnect(integration_id))
+        if result.get("success"):
+            console.print(f"[green]Disconnected: {integration_id}[/green]")
+        else:
+            console.print(f"[red]Disconnect failed: {result.get('error', 'unknown error')}[/red]")
+        return
+
+    if action == "sync":
+        result = asyncio.run(registry.sync(integration_id))
+        if result.get("success"):
+            console.print(f"[green]Synced: {integration_id}[/green]")
+            console.print_json(json.dumps(result.get("result", {})))
+        else:
+            console.print(f"[red]Sync failed: {result.get('error', 'unknown error')}[/red]")
+        return
+
+    console.print(f"[red]Unknown action: {action}[/red]")
+    console.print("[dim]Valid actions: list, connect, disconnect, sync, grant[/dim]")
     console.print()
 
     # ── Build the server launch command ──

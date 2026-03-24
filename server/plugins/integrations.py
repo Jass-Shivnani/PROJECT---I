@@ -14,13 +14,14 @@ import hashlib
 import secrets
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
+import io
 from pathlib import Path
 from typing import Any, Optional
 from loguru import logger
 
 from server.plugins.types import (
     AuthType, IntegrationStatus, IntegrationConfig,
-    IntegrationCredentials, HookEvent,
+    IntegrationCredentials, HookEvent, IntegrationHookContext,
 )
 from server.plugins.hooks import HookRunner
 from server.plugins.permissions import PermissionManager, Permission
@@ -66,6 +67,7 @@ class CredentialVault:
         try:
             data = json.loads(path.read_text())
             return IntegrationCredentials(
+                integration_id=integration_id,
                 auth_type=AuthType(data["auth_type"]),
                 access_token=data.get("access_token"),
                 refresh_token=data.get("refresh_token"),
@@ -267,15 +269,16 @@ class IntegrationRegistry:
                     "required_permissions": [p.value for p in integration.REQUIRED_PERMISSIONS],
                 }
         
-        # Run pre-connect hook
-        from server.plugins.types import IntegrationHookContext
+        # Run connect hook
         hook_ctx = IntegrationHookContext(
+            event=HookEvent.ON_INTEGRATION_CONNECT,
             plugin_id=integration_id,
-            data={"params": params},
             integration_id=integration_id,
-            action="connect",
+            integration_name=integration.DISPLAY_NAME,
+            event_type="connect",
+            event_data={"params": params},
         )
-        await self._hooks.run(HookEvent.BEFORE_INTEGRATION_SYNC, hook_ctx)
+        await self._hooks.run(HookEvent.ON_INTEGRATION_CONNECT, hook_ctx)
         
         # Connect
         success = await integration.connect(params)
@@ -283,9 +286,16 @@ class IntegrationRegistry:
         if success and integration.credentials:
             self._vault.store(integration_id, integration.credentials)
         
-        # Run post-connect hook
-        hook_ctx.data["success"] = success
-        await self._hooks.run(HookEvent.AFTER_INTEGRATION_SYNC, hook_ctx)
+        # Run generic integration event hook
+        hook_ctx = IntegrationHookContext(
+            event=HookEvent.ON_INTEGRATION_EVENT,
+            plugin_id=integration_id,
+            integration_id=integration_id,
+            integration_name=integration.DISPLAY_NAME,
+            event_type="connect_result",
+            event_data={"success": success, "error": integration.error_message},
+        )
+        await self._hooks.run(HookEvent.ON_INTEGRATION_EVENT, hook_ctx)
         
         return {
             "success": success,
@@ -301,6 +311,16 @@ class IntegrationRegistry:
         
         await integration.disconnect()
         self._vault.delete(integration_id)
+
+        hook_ctx = IntegrationHookContext(
+            event=HookEvent.ON_INTEGRATION_DISCONNECT,
+            plugin_id=integration_id,
+            integration_id=integration_id,
+            integration_name=integration.DISPLAY_NAME,
+            event_type="disconnect",
+            event_data={},
+        )
+        await self._hooks.run(HookEvent.ON_INTEGRATION_DISCONNECT, hook_ctx)
         
         return {"success": True, "status": integration.status.value}
     
@@ -318,6 +338,16 @@ class IntegrationRegistry:
             result = await integration.sync()
             integration.last_sync = datetime.now()
             integration.status = IntegrationStatus.CONNECTED
+
+            hook_ctx = IntegrationHookContext(
+                event=HookEvent.ON_INTEGRATION_EVENT,
+                plugin_id=integration_id,
+                integration_id=integration_id,
+                integration_name=integration.DISPLAY_NAME,
+                event_type="sync",
+                event_data={"result": result},
+            )
+            await self._hooks.run(HookEvent.ON_INTEGRATION_EVENT, hook_ctx)
             return {"success": True, "result": result}
         except Exception as e:
             integration.status = IntegrationStatus.ERROR
@@ -331,6 +361,75 @@ class IntegrationRegistry:
             if integration.status == IntegrationStatus.CONNECTED:
                 tools.extend(integration.get_tools())
         return tools
+
+    def get_all_tools(self) -> list[dict]:
+        """Get all tools from all integrations, connected or not."""
+        tools = []
+        for integration in self._integrations.values():
+            tools.extend(integration.get_tools())
+        return tools
+
+    def has_tool(self, tool_name: str) -> bool:
+        """Check if any integration exposes a tool name."""
+        for integration in self._integrations.values():
+            if any(t.get("name") == tool_name for t in integration.get_tools()):
+                return True
+        return False
+
+    async def execute_tool(self, tool_name: str, params: dict[str, Any]) -> Any:
+        """Execute an integration-owned tool by name."""
+        for integration in self._integrations.values():
+            for tool in integration.get_tools():
+                if tool.get("name") != tool_name:
+                    continue
+
+                if integration.status != IntegrationStatus.CONNECTED:
+                    raise RuntimeError(
+                        f"Integration '{integration.DISPLAY_NAME}' is not connected. "
+                        f"Run: dione integrations connect {integration.INTEGRATION_ID}"
+                    )
+
+                return await self._dispatch_tool(integration, tool_name, params)
+
+        raise KeyError(f"Unknown integration tool: {tool_name}")
+
+    async def _dispatch_tool(self, integration: BaseIntegration, tool_name: str, params: dict[str, Any]) -> Any:
+        """Dispatch integration tools to concrete integration methods."""
+        if tool_name == "gmail_read" and hasattr(integration, "read_emails"):
+            return await integration.read_emails(
+                count=int(params.get("count", 5)),
+                unread_only=bool(params.get("unread_only", False)),
+            )
+
+        if tool_name == "gmail_search" and hasattr(integration, "search_emails"):
+            return await integration.search_emails(
+                query=str(params.get("query", "")).strip(),
+                count=int(params.get("count", 10)),
+            )
+
+        if tool_name == "gmail_send" and hasattr(integration, "send_email"):
+            return await integration.send_email(
+                to=str(params.get("to", "")).strip(),
+                subject=str(params.get("subject", "")).strip(),
+                body=str(params.get("body", "")).strip(),
+            )
+
+        if tool_name == "gmail_unread_count" and hasattr(integration, "sync"):
+            summary = await integration.sync()
+            return {"unread": summary.get("unread", 0), "summary": summary}
+
+        if tool_name == "google_drive_search" and hasattr(integration, "list_files"):
+            return await integration.list_files(
+                query=str(params.get("query", "")).strip(),
+                count=int(params.get("count", 10)),
+            )
+
+        if tool_name == "google_drive_read" and hasattr(integration, "read_file_text"):
+            return await integration.read_file_text(
+                file_id=str(params.get("file_id", "")).strip()
+            )
+
+        raise RuntimeError(f"Tool '{tool_name}' is not implemented for integration '{integration.INTEGRATION_ID}'")
     
     def get_integration(self, integration_id: str) -> Optional[BaseIntegration]:
         """Get a specific integration."""
@@ -346,6 +445,31 @@ class IntegrationRegistry:
             iid for iid, i in self._integrations.items()
             if i.status == IntegrationStatus.CONNECTED
         ]
+
+    def grant_permissions(self, integration_id: str, permission_names: list[str] | None = None) -> dict[str, list[str]]:
+        """Grant required or explicit permissions for an integration."""
+        integration = self._integrations.get(integration_id)
+        if not integration:
+            return {"granted": [], "failed": permission_names or []}
+
+        granted: list[str] = []
+        failed: list[str] = []
+        requested = permission_names or [p.value for p in integration.REQUIRED_PERMISSIONS]
+
+        for permission_name in requested:
+            try:
+                permission = Permission(permission_name)
+                self._permissions.grant(
+                    integration_id,
+                    permission,
+                    granted_by="user",
+                    reason="runtime integration grant",
+                )
+                granted.append(permission.value)
+            except Exception:
+                failed.append(permission_name)
+
+        return {"granted": granted, "failed": failed}
     
     def to_dict(self) -> dict:
         """Full registry state."""
@@ -373,28 +497,180 @@ class GoogleDriveIntegration(BaseIntegration):
     ]
     
     async def authenticate(self, params: dict[str, Any]) -> bool:
-        if "access_token" in params:
+        access_token = params.get("access_token", "")
+        if access_token:
             self.credentials = IntegrationCredentials(
+                integration_id=self.INTEGRATION_ID,
                 auth_type=AuthType.OAUTH2,
-                access_token=params["access_token"],
-                refresh_token=params.get("refresh_token"),
+                access_token=access_token,
+                refresh_token=params.get("refresh_token", ""),
                 token_expiry=datetime.now() + timedelta(hours=1),
+                extra={
+                    "client_id": params.get("client_id", ""),
+                    "client_secret": params.get("client_secret", ""),
+                    "token_uri": params.get("token_uri", "https://oauth2.googleapis.com/token"),
+                },
             )
             return True
+
+        client_secret_path = params.get("client_secret_path", "")
+        if client_secret_path:
+            try:
+                from google_auth_oauthlib.flow import InstalledAppFlow
+
+                flow = InstalledAppFlow.from_client_secrets_file(client_secret_path, self.SCOPES)
+                creds = flow.run_local_server(port=0)
+
+                self.credentials = IntegrationCredentials(
+                    integration_id=self.INTEGRATION_ID,
+                    auth_type=AuthType.OAUTH2,
+                    access_token=creds.token or "",
+                    refresh_token=creds.refresh_token or "",
+                    token_expiry=creds.expiry,
+                    extra={
+                        "client_secret_path": client_secret_path,
+                        "client_id": creds.client_id or "",
+                        "client_secret": getattr(creds, "client_secret", "") or "",
+                        "token_uri": creds.token_uri or "https://oauth2.googleapis.com/token",
+                    },
+                )
+                return True
+            except Exception as e:
+                logger.error(f"Google Drive OAuth authentication failed: {e}")
+                return False
+
         return False
     
     async def test_connection(self) -> bool:
-        return self.credentials is not None
+        if not self.credentials:
+            return False
+        try:
+            from google.oauth2.credentials import Credentials
+            from google.auth.transport.requests import Request
+            from googleapiclient.discovery import build
+
+            creds = Credentials(
+                token=self.credentials.access_token,
+                refresh_token=self.credentials.refresh_token,
+                token_uri=self.credentials.extra.get("token_uri", "https://oauth2.googleapis.com/token"),
+                client_id=self.credentials.extra.get("client_id", ""),
+                client_secret=self.credentials.extra.get("client_secret", ""),
+                scopes=self.SCOPES,
+            )
+
+            if creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+                self.credentials.access_token = creds.token or self.credentials.access_token
+                self.credentials.token_expiry = creds.expiry
+
+            service = build("drive", "v3", credentials=creds, cache_discovery=False)
+            service.about().get(fields="user(emailAddress)").execute()
+            return True
+        except Exception as e:
+            logger.error(f"Google Drive test_connection failed: {e}")
+            return False
     
     async def sync(self) -> dict[str, Any]:
-        return {"files_synced": 0}
+        files = await self.list_files(query="", count=20)
+        return {
+            "files_synced": len(files),
+            "sample": files[:5],
+            "synced_at": datetime.now().isoformat(),
+        }
+
+    async def list_files(self, query: str = "", count: int = 10) -> list[dict[str, Any]]:
+        if not self.credentials:
+            return []
+
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+        from googleapiclient.discovery import build
+
+        creds = Credentials(
+            token=self.credentials.access_token,
+            refresh_token=self.credentials.refresh_token,
+            token_uri=self.credentials.extra.get("token_uri", "https://oauth2.googleapis.com/token"),
+            client_id=self.credentials.extra.get("client_id", ""),
+            client_secret=self.credentials.extra.get("client_secret", ""),
+            scopes=self.SCOPES,
+        )
+
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            self.credentials.access_token = creds.token or self.credentials.access_token
+            self.credentials.token_expiry = creds.expiry
+
+        service = build("drive", "v3", credentials=creds, cache_discovery=False)
+        q = "trashed=false"
+        if query:
+            safe_query = query.replace("'", "\\'")
+            q = f"{q} and name contains '{safe_query}'"
+
+        response = service.files().list(
+            q=q,
+            pageSize=max(1, min(int(count), 50)),
+            fields="files(id,name,mimeType,modifiedTime,size,webViewLink)",
+        ).execute()
+        return response.get("files", [])
+
+    async def read_file_text(self, file_id: str) -> dict[str, Any]:
+        if not self.credentials:
+            return {"error": "Not authenticated"}
+        if not file_id:
+            return {"error": "file_id is required"}
+
+        from google.oauth2.credentials import Credentials
+        from google.auth.transport.requests import Request
+        from googleapiclient.discovery import build
+        from googleapiclient.http import MediaIoBaseDownload
+
+        creds = Credentials(
+            token=self.credentials.access_token,
+            refresh_token=self.credentials.refresh_token,
+            token_uri=self.credentials.extra.get("token_uri", "https://oauth2.googleapis.com/token"),
+            client_id=self.credentials.extra.get("client_id", ""),
+            client_secret=self.credentials.extra.get("client_secret", ""),
+            scopes=self.SCOPES,
+        )
+        if creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+            self.credentials.access_token = creds.token or self.credentials.access_token
+            self.credentials.token_expiry = creds.expiry
+
+        service = build("drive", "v3", credentials=creds, cache_discovery=False)
+        meta = service.files().get(fileId=file_id, fields="id,name,mimeType").execute()
+        mime = meta.get("mimeType", "")
+
+        buffer = io.BytesIO()
+        if mime == "application/vnd.google-apps.document":
+            request = service.files().export_media(fileId=file_id, mimeType="text/plain")
+        else:
+            request = service.files().get_media(fileId=file_id)
+
+        downloader = MediaIoBaseDownload(buffer, request)
+        done = False
+        while not done:
+            _, done = downloader.next_chunk()
+
+        content_bytes = buffer.getvalue()
+        content = content_bytes.decode("utf-8", errors="replace")
+        return {
+            "id": meta.get("id", file_id),
+            "name": meta.get("name", ""),
+            "mimeType": mime,
+            "content_preview": content[:4000],
+            "bytes": len(content_bytes),
+        }
     
     def get_tools(self) -> list[dict]:
         return [
             {
                 "name": "google_drive_search",
                 "description": "Search for files in Google Drive",
-                "parameters": {"query": {"type": "string", "description": "Search query"}},
+                "parameters": {
+                    "query": {"type": "string", "description": "Search query"},
+                    "count": {"type": "integer", "description": "Max results (default 10)"},
+                },
                 "integration": self.INTEGRATION_ID,
             },
             {
@@ -421,6 +697,7 @@ class GooglePhotosIntegration(BaseIntegration):
     async def authenticate(self, params: dict[str, Any]) -> bool:
         if "access_token" in params:
             self.credentials = IntegrationCredentials(
+                integration_id=self.INTEGRATION_ID,
                 auth_type=AuthType.OAUTH2,
                 access_token=params["access_token"],
                 refresh_token=params.get("refresh_token"),
@@ -481,6 +758,7 @@ class GoogleMailIntegration(BaseIntegration):
             return False
         
         self.credentials = IntegrationCredentials(
+            integration_id=self.INTEGRATION_ID,
             auth_type=AuthType.API_KEY,
             api_key=app_password,
             extra={"email": email},
@@ -708,6 +986,7 @@ class GoogleCalendarIntegration(BaseIntegration):
     async def authenticate(self, params: dict[str, Any]) -> bool:
         if "access_token" in params:
             self.credentials = IntegrationCredentials(
+                integration_id=self.INTEGRATION_ID,
                 auth_type=AuthType.OAUTH2,
                 access_token=params["access_token"],
                 refresh_token=params.get("refresh_token"),
@@ -998,57 +1277,120 @@ class InstagramIntegration(BaseIntegration):
 
 class WhatsAppIntegration(BaseIntegration):
     """
-    WhatsApp — send/receive messages via WhatsApp Business Cloud API.
-    
-    Requires a Meta Business access token and phone number ID.
+    WhatsApp Web integration via local Node.js Baileys bridge.
+
+    Uses QR login (no Business API required).
     """
     
     INTEGRATION_ID = "whatsapp"
     DISPLAY_NAME = "WhatsApp"
-    DESCRIPTION = "Send and receive WhatsApp messages"
-    AUTH_TYPE = AuthType.TOKEN
+    DESCRIPTION = "Send and receive WhatsApp messages via WhatsApp Web"
+    AUTH_TYPE = AuthType.DEVICE_CODE
     REQUIRED_PERMISSIONS = [Permission.INTEGRATION_CONNECT, Permission.NETWORK_ACCESS]
-    SCOPES = ["whatsapp_business_messaging"]
-    
-    GRAPH_API = "https://graph.facebook.com/v21.0"
+    SCOPES = ["whatsapp_web"]
+
+    def _bridge_from_credentials(self):
+        if not self.credentials:
+            return None
+
+        from server.whatsapp import get_bridge
+
+        bridge_port = int(self.credentials.extra.get("bridge_port", 8901))
+        dione_port = int(self.credentials.extra.get("dione_port", 8900))
+        return get_bridge(dione_port=dione_port, bridge_port=bridge_port)
+
+    def _ensure_bridge_started(self) -> bool:
+        bridge = self._bridge_from_credentials()
+        if bridge is None:
+            return False
+        return bridge.start()
     
     async def authenticate(self, params: dict[str, Any]) -> bool:
-        token = params.get("access_token", "")
-        phone_id = params.get("phone_number_id", "")
-        if not token or not phone_id:
+        try:
+            from server.whatsapp import get_bridge
+
+            dione_port = int(params.get("dione_port", 8900))
+            bridge_port = int(params.get("bridge_port", 8901))
+            bridge = get_bridge(dione_port=dione_port, bridge_port=bridge_port)
+
+            started = bridge.start()
+            if not started:
+                return False
+
+            self.credentials = IntegrationCredentials(
+                integration_id=self.INTEGRATION_ID,
+                auth_type=AuthType.DEVICE_CODE,
+                extra={
+                    "mode": "web_bridge",
+                    "bridge_port": bridge_port,
+                    "dione_port": dione_port,
+                },
+            )
+            return True
+        except Exception as e:
+            logger.error(f"WhatsApp web bridge auth failed: {e}")
             return False
-        self.credentials = IntegrationCredentials(
-            auth_type=AuthType.TOKEN,
-            access_token=token,
-            extra={"phone_number_id": phone_id},
-        )
-        return True
     
     async def test_connection(self) -> bool:
-        return self.credentials is not None
+        if not self.credentials:
+            return False
+        try:
+            if not self._ensure_bridge_started():
+                return False
+            bridge = self._bridge_from_credentials()
+            if bridge is None:
+                return False
+            status = await bridge.get_status()
+            return status.get("status") in {"connected", "connecting", "qr"}
+        except Exception:
+            return False
     
     async def sync(self) -> dict[str, Any]:
-        return {"status": "connected"}
+        if not self.credentials:
+            return {"status": "disconnected"}
+        try:
+            if not self._ensure_bridge_started():
+                return {"status": "bridge_not_running", "has_qr": False}
+            bridge = self._bridge_from_credentials()
+            if bridge is None:
+                return {"status": "bridge_not_running", "has_qr": False}
+            status = await bridge.get_status()
+            qr = await bridge.get_qr()
+            return {
+                "status": status.get("status", "unknown"),
+                "has_qr": bool(qr.get("qr")),
+                "bridge": status,
+            }
+        except Exception as e:
+            return {"status": "error", "error": str(e)}
+
+    async def get_qr(self) -> dict:
+        if not self.credentials:
+            return {"status": "disconnected", "qr": None}
+        try:
+            if not self._ensure_bridge_started():
+                return {"status": "bridge_not_running", "qr": None}
+            bridge = self._bridge_from_credentials()
+            if bridge is None:
+                return {"status": "bridge_not_running", "qr": None}
+            return await bridge.get_qr()
+        except Exception as e:
+            return {"status": "error", "error": str(e), "qr": None}
     
     async def send_message(self, to: str, text: str) -> dict:
-        """Send a WhatsApp text message."""
+        """Send a WhatsApp text message via bridge."""
         if not self.credentials:
             return {"success": False, "error": "Not authenticated"}
         try:
-            import httpx
-            phone_id = self.credentials.extra.get("phone_number_id", "")
-            async with httpx.AsyncClient() as client:
-                r = await client.post(
-                    f"{self.GRAPH_API}/{phone_id}/messages",
-                    headers={"Authorization": f"Bearer {self.credentials.access_token}"},
-                    json={
-                        "messaging_product": "whatsapp",
-                        "to": to,
-                        "type": "text",
-                        "text": {"body": text},
-                    },
-                )
-                return {"success": r.status_code == 200, "response": r.json()}
+            if not self._ensure_bridge_started():
+                return {"success": False, "error": "Bridge not running"}
+            bridge = self._bridge_from_credentials()
+            if bridge is None:
+                return {"success": False, "error": "Bridge not running"}
+            result = await bridge.send_message(to=to, text=text)
+            if result.get("error"):
+                return {"success": False, "error": result.get("error")}
+            return {"success": bool(result.get("ok", False)), "response": result}
         except Exception as e:
             return {"success": False, "error": str(e)}
     
@@ -1077,4 +1419,15 @@ ALL_INTEGRATIONS: list[type[BaseIntegration]] = [
     InstagramIntegration,
     WhatsAppIntegration,
 ]
+
+
+def create_default_registry(data_dir: str = "data") -> IntegrationRegistry:
+    """Create and pre-register all built-in integrations."""
+    vault = CredentialVault(data_dir=data_dir)
+    permissions = PermissionManager(data_dir=data_dir)
+    hooks = HookRunner()
+    registry = IntegrationRegistry(vault=vault, permissions=permissions, hooks=hooks, data_dir=data_dir)
+    for integration_class in ALL_INTEGRATIONS:
+        registry.register(integration_class())
+    return registry
 

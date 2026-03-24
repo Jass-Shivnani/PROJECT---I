@@ -229,10 +229,14 @@ class PermissionManager:
         
         try:
             data = json.loads(self._grants_file.read_text())
+            legacy_skip = {"tool_execute", "hook_register"}
             for plugin_id, perms in data.items():
                 self._grants[plugin_id] = {}
                 for perm_str, grant_data in perms.items():
                     try:
+                        if perm_str in legacy_skip:
+                            # Old permission names from previous schema versions
+                            continue
                         permission = Permission(perm_str)
                         self._grants[plugin_id][permission] = PermissionGrant(
                             plugin_id=plugin_id,

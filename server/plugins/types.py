@@ -288,6 +288,7 @@ class IntegrationStatus(enum.Enum):
     """Connection status of an integration."""
     DISCONNECTED = "disconnected"
     CONNECTING = "connecting"
+    SYNCING = "syncing"
     CONNECTED = "connected"
     ERROR = "error"
     EXPIRED = "expired"
@@ -314,10 +315,12 @@ class IntegrationConfig:
 @dataclass
 class IntegrationCredentials:
     """Stored credentials for an integration."""
-    integration_id: str
+    integration_id: str = ""
+    auth_type: AuthType = AuthType.NONE
     access_token: str = ""
     refresh_token: str = ""
     token_type: str = "Bearer"
+    token_expiry: Optional[datetime] = None
     expires_at: Optional[datetime] = None
     api_key: str = ""
     extra: dict = field(default_factory=dict)
