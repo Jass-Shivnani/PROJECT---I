@@ -187,11 +187,12 @@ def create_app() -> FastAPI:
     )
 
     # Register routes
-    from server.api.routes import chat, knowledge, plugins, status, audio, integrations
+    from server.api.routes import chat, knowledge, plugins, status, audio, integrations, channels
     app.include_router(chat.router, prefix="/api", tags=["Chat"])
     app.include_router(knowledge.router, prefix="/api/knowledge", tags=["Knowledge"])
     app.include_router(plugins.router, prefix="/api/plugins", tags=["Plugins"])
     app.include_router(integrations.router, prefix="/api/integrations", tags=["Integrations"])
+    app.include_router(channels.router, prefix="/api/channels", tags=["Channels"])
     app.include_router(status.router, prefix="/api/status", tags=["Status"])
     app.include_router(audio.router, prefix="/api/audio", tags=["Audio"])
 
