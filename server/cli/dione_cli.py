@@ -137,6 +137,29 @@ def _get_log_level(verbose: bool, debug: bool) -> str:
     return "warning"
 
 
+def _print_whatsapp_qr_in_cli(qr_data: dict):
+    """Render WhatsApp QR directly in terminal when available."""
+    if not isinstance(qr_data, dict):
+        return
+
+    status_value = qr_data.get("status", "unknown")
+    terminal_qr = qr_data.get("terminal")
+
+    console.print(f"[cyan]WhatsApp status:[/cyan] {status_value}")
+
+    if isinstance(terminal_qr, str) and terminal_qr.strip():
+        console.print("[bold green]Scan this QR in WhatsApp → Linked devices:[/bold green]")
+        console.print()
+        console.print(terminal_qr)
+        console.print()
+        return
+
+    if qr_data.get("qr"):
+        console.print("[yellow]QR available at /api/integrations/whatsapp/qr[/yellow]")
+    else:
+        console.print("[yellow]No QR yet. Run: dione integrations sync whatsapp (or wait a few seconds).[/yellow]")
+
+
 # ─── Commands ──────────────────────────────────────────────
 
 
@@ -396,12 +419,7 @@ def integrations(
                 if integration_id == "whatsapp":
                     integration_obj = registry.get_integration("whatsapp")
                     qr_data = asyncio.run(integration_obj.get_qr()) if integration_obj and hasattr(integration_obj, "get_qr") else {}
-                    status_value = qr_data.get("status", "unknown") if isinstance(qr_data, dict) else "unknown"
-                    console.print(f"[cyan]WhatsApp status:[/cyan] {status_value}")
-                    if isinstance(qr_data, dict) and qr_data.get("qr"):
-                        console.print("[yellow]QR available. Open /api/integrations/whatsapp/qr or mobile settings to scan.[/yellow]")
-                    else:
-                        console.print("[yellow]No QR yet. Run: dione integrations sync whatsapp (or wait a few seconds).[/yellow]")
+                    _print_whatsapp_qr_in_cli(qr_data)
             else:
                 console.print(f"[yellow]Connected but sync failed: {sync_result.get('error', 'unknown')}[/yellow]")
         else:
@@ -421,6 +439,10 @@ def integrations(
         if result.get("success"):
             console.print(f"[green]Synced: {integration_id}[/green]")
             console.print_json(json.dumps(result.get("result", {})))
+            if integration_id == "whatsapp":
+                integration_obj = registry.get_integration("whatsapp")
+                qr_data = asyncio.run(integration_obj.get_qr()) if integration_obj and hasattr(integration_obj, "get_qr") else {}
+                _print_whatsapp_qr_in_cli(qr_data)
         else:
             console.print(f"[red]Sync failed: {result.get('error', 'unknown error')}[/red]")
         return

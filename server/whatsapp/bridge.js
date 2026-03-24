@@ -22,6 +22,7 @@ const logger = pino({ level: process.env.LOG_LEVEL || "warn" });
 let sock = null;
 let currentQR = null;
 let currentQRDataUrl = null;
+let currentQRTerminal = null;
 let connectionStatus = "disconnected";
 let reconnectAttempts = 0;
 const MAX_RECONNECT = 10;
@@ -36,6 +37,7 @@ async function connectWhatsApp() {
   connectionStatus = "connecting";
   currentQR = null;
   currentQRDataUrl = null;
+  currentQRTerminal = null;
 
   sock = makeWASocket({
     auth: {
@@ -61,6 +63,9 @@ async function connectWhatsApp() {
       try {
         currentQRDataUrl = await QRCode.toDataURL(qr, { width: 300, margin: 2 });
       } catch {}
+      try {
+        currentQRTerminal = await QRCode.toString(qr, { type: "utf8", small: true });
+      } catch {}
       console.log("[whatsapp-bridge] QR code ready — scan with your WhatsApp app");
     }
 
@@ -68,6 +73,7 @@ async function connectWhatsApp() {
       connectionStatus = "connected";
       currentQR = null;
       currentQRDataUrl = null;
+      currentQRTerminal = null;
       reconnectAttempts = 0;
       const me = sock.user;
       console.log(`[whatsapp-bridge] Connected as ${me?.id || "unknown"}`);
@@ -180,11 +186,11 @@ const server = createServer(async (req, res) => {
 
   if (req.method === "GET" && url.pathname === "/qr") {
     if (currentQRDataUrl) {
-      res.end(JSON.stringify({ qr: currentQRDataUrl, status: connectionStatus }));
+      res.end(JSON.stringify({ qr: currentQRDataUrl, terminal: currentQRTerminal, status: connectionStatus }));
     } else if (connectionStatus === "connected") {
-      res.end(JSON.stringify({ qr: null, status: "connected", message: "Already connected" }));
+      res.end(JSON.stringify({ qr: null, terminal: null, status: "connected", message: "Already connected" }));
     } else {
-      res.end(JSON.stringify({ qr: null, status: connectionStatus, message: "No QR available yet" }));
+      res.end(JSON.stringify({ qr: null, terminal: null, status: connectionStatus, message: "No QR available yet" }));
     }
     return;
   }
@@ -227,6 +233,7 @@ const server = createServer(async (req, res) => {
     connectionStatus = "disconnected";
     currentQR = null;
     currentQRDataUrl = null;
+    currentQRTerminal = null;
     res.end(JSON.stringify({ ok: true, message: "Logged out" }));
     setTimeout(connectWhatsApp, 1000);
     return;
