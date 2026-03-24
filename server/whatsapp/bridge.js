@@ -39,11 +39,18 @@ function normalizeJidNumber(jid = "") {
     .trim();
 }
 
+function isSelfChat(senderJid = "") {
+  const selfNumber = normalizeJidNumber(sock?.user?.id || "");
+  const chatNumber = normalizeJidNumber(senderJid);
+  return !!selfNumber && selfNumber === chatNumber;
+}
+
 function shouldProcessForReply(senderJid, isGroup) {
   if (REPLY_SCOPE === "all") return true;
 
   // Default "personal": only self chat (not groups/broadcast)
-  if (isGroup || !senderJid.endsWith("@s.whatsapp.net")) return false;
+  const isDirectJid = senderJid.endsWith("@s.whatsapp.net") || senderJid.endsWith("@lid");
+  if (isGroup || !isDirectJid) return false;
 
   if (ALLOWED_CHAT_ID) {
     return senderJid === ALLOWED_CHAT_ID;
@@ -54,9 +61,7 @@ function shouldProcessForReply(senderJid, isGroup) {
     return chatNumber === ALLOWED_NUMBER;
   }
 
-  const selfNumber = normalizeJidNumber(sock?.user?.id || "");
-  const chatNumber = normalizeJidNumber(senderJid);
-  return !!selfNumber && selfNumber === chatNumber;
+  return isSelfChat(senderJid);
 }
 
 async function connectWhatsApp() {
@@ -140,7 +145,6 @@ async function connectWhatsApp() {
 
     for (const msg of messages) {
       if (msg.key.remoteJid === "status@broadcast") continue;
-      if (msg.key.fromMe) continue;
 
       const text = msg.message?.conversation
         || msg.message?.extendedTextMessage?.text
@@ -154,6 +158,11 @@ async function connectWhatsApp() {
       const senderName = msg.pushName || "";
       const isGroup = senderJid.endsWith("@g.us");
       const participantJid = isGroup ? (msg.key.participant || "") : senderJid;
+
+      // Ignore device-originated outbound messages except self-chat commands.
+      if (msg.key.fromMe && !isSelfChat(senderJid)) {
+        continue;
+      }
 
       if (!shouldProcessForReply(senderJid, isGroup)) {
         continue;

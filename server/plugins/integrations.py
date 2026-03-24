@@ -12,6 +12,7 @@ from __future__ import annotations
 import json
 import hashlib
 import secrets
+import asyncio
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 import io
@@ -1387,7 +1388,15 @@ class WhatsAppIntegration(BaseIntegration):
             bridge = self._bridge_from_credentials()
             if bridge is None:
                 return {"status": "bridge_not_running", "has_qr": False}
+
             status = await bridge.get_status()
+            if status.get("status") == "connecting":
+                for _ in range(8):
+                    await asyncio.sleep(0.5)
+                    status = await bridge.get_status()
+                    if status.get("status") in {"connected", "qr", "disconnected", "error"}:
+                        break
+
             qr = await bridge.get_qr()
             return {
                 "status": status.get("status", "unknown"),
