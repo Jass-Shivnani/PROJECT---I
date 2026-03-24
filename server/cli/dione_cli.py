@@ -219,6 +219,97 @@ def start(
     table.add_row("Mode", "Verbose" if verbose else ("Debug" if debug else "Background"))
     console.print(table)
 
+    # ── Build the server launch command ──
+    python_exe = sys.executable
+    server_cmd = [
+        python_exe, "-m", "uvicorn",
+        "server.api.app:create_app",
+        "--factory",
+        "--host", str(_host),
+        "--port", str(_port),
+        "--log-level", log_level,
+        "--ws-ping-interval", "30",
+        "--ws-ping-timeout", "10",
+    ]
+    if debug:
+        server_cmd.append("--reload")
+
+    show_terminal = verbose or debug
+
+    if show_terminal:
+        # ── Verbose/Debug: run in a VISIBLE new console window ──
+        console.print("[bold green]🚀 Starting Dione (visible terminal)...[/bold green]")
+        console.print(f"[dim]   Server terminal will open in a new window.[/dim]")
+
+        # Use CREATE_NEW_CONSOLE to open a visible window
+        CREATE_NEW_CONSOLE = 0x00000010
+        proc = subprocess.Popen(
+            server_cmd,
+            cwd=str(PROJECT_ROOT),
+            creationflags=CREATE_NEW_CONSOLE,
+        )
+    else:
+        # ── Background: run HIDDEN, no window ──
+        console.print("[bold green]🚀 Starting Dione (background)...[/bold green]")
+
+        # Redirect output to log file
+        LOGS_DIR.mkdir(parents=True, exist_ok=True)
+        log_file = LOGS_DIR / "server_output.log"
+
+        CREATE_NO_WINDOW = 0x08000000
+        log_handle = open(log_file, "w", encoding="utf-8")
+        proc = subprocess.Popen(
+            server_cmd,
+            cwd=str(PROJECT_ROOT),
+            stdout=log_handle,
+            stderr=subprocess.STDOUT,
+            creationflags=CREATE_NO_WINDOW,
+        )
+
+    # ── Save PID and wait for server to be ready ──
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    PID_FILE.write_text(str(proc.pid))
+
+    console.print(f"[dim]   PID: {proc.pid}[/dim]")
+    console.print(f"[dim]   API: http://{_host}:{_port}/api[/dim]")
+    console.print()
+
+    # Wait for server to be ready (up to 15 seconds)
+    console.print("[dim]Waiting for server to be ready...[/dim]")
+    import httpx
+    ready = False
+    for i in range(30):
+        time.sleep(0.5)
+        # Check if process died
+        if proc.poll() is not None:
+            console.print(f"[red]Server process exited with code {proc.returncode}.[/red]")
+            if not show_terminal:
+                console.print(f"[dim]Check logs: {LOGS_DIR / 'server_output.log'}[/dim]")
+            _clear_pid()
+            return
+        try:
+            resp = httpx.get(f"http://{'127.0.0.1' if _host == '0.0.0.0' else _host}:{_port}/", timeout=2)
+            if resp.status_code == 200:
+                ready = True
+                break
+        except Exception:
+            pass
+
+    if ready:
+        console.print(Panel(
+            f"[bold green]● Server is running[/bold green]\n\n"
+            f"  API:  [cyan]http://{_host}:{_port}/api[/cyan]\n"
+            f"  WS:   [cyan]ws://{_host}:{_port}/api/chat/ws[/cyan]\n\n"
+            f"[dim]Run [bold cyan]dione client[/bold cyan] to start chatting\n"
+            f"Run [bold cyan]dione stop[/bold cyan] to stop the server[/dim]",
+            title="🌙 Dione AI",
+            border_style="green",
+            box=box.ROUNDED,
+        ))
+    else:
+        console.print("[yellow]Server is starting up (may take a few more seconds)...[/yellow]")
+        console.print(f"[dim]Run [cyan]dione status[/cyan] to check, or [cyan]dione client[/cyan] to connect.[/dim]")
+
 
 @app.command()
 def integrations(
@@ -337,97 +428,6 @@ def integrations(
     console.print(f"[red]Unknown action: {action}[/red]")
     console.print("[dim]Valid actions: list, connect, disconnect, sync, grant[/dim]")
     console.print()
-
-    # ── Build the server launch command ──
-    python_exe = sys.executable
-    server_cmd = [
-        python_exe, "-m", "uvicorn",
-        "server.api.app:create_app",
-        "--factory",
-        "--host", str(_host),
-        "--port", str(_port),
-        "--log-level", log_level,
-        "--ws-ping-interval", "30",
-        "--ws-ping-timeout", "10",
-    ]
-    if debug:
-        server_cmd.append("--reload")
-
-    show_terminal = verbose or debug
-
-    if show_terminal:
-        # ── Verbose/Debug: run in a VISIBLE new console window ──
-        console.print("[bold green]🚀 Starting Dione (visible terminal)...[/bold green]")
-        console.print(f"[dim]   Server terminal will open in a new window.[/dim]")
-
-        # Use CREATE_NEW_CONSOLE to open a visible window
-        CREATE_NEW_CONSOLE = 0x00000010
-        proc = subprocess.Popen(
-            server_cmd,
-            cwd=str(PROJECT_ROOT),
-            creationflags=CREATE_NEW_CONSOLE,
-        )
-    else:
-        # ── Background: run HIDDEN, no window ──
-        console.print("[bold green]🚀 Starting Dione (background)...[/bold green]")
-
-        # Redirect output to log file
-        LOGS_DIR.mkdir(parents=True, exist_ok=True)
-        log_file = LOGS_DIR / "server_output.log"
-
-        CREATE_NO_WINDOW = 0x08000000
-        log_handle = open(log_file, "w", encoding="utf-8")
-        proc = subprocess.Popen(
-            server_cmd,
-            cwd=str(PROJECT_ROOT),
-            stdout=log_handle,
-            stderr=subprocess.STDOUT,
-            creationflags=CREATE_NO_WINDOW,
-        )
-
-    # ── Save PID and wait for server to be ready ──
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    PID_FILE.write_text(str(proc.pid))
-
-    console.print(f"[dim]   PID: {proc.pid}[/dim]")
-    console.print(f"[dim]   API: http://{_host}:{_port}/api[/dim]")
-    console.print()
-
-    # Wait for server to be ready (up to 15 seconds)
-    console.print("[dim]Waiting for server to be ready...[/dim]")
-    import httpx
-    ready = False
-    for i in range(30):
-        time.sleep(0.5)
-        # Check if process died
-        if proc.poll() is not None:
-            console.print(f"[red]Server process exited with code {proc.returncode}.[/red]")
-            if not show_terminal:
-                console.print(f"[dim]Check logs: {LOGS_DIR / 'server_output.log'}[/dim]")
-            _clear_pid()
-            return
-        try:
-            resp = httpx.get(f"http://{'127.0.0.1' if _host == '0.0.0.0' else _host}:{_port}/", timeout=2)
-            if resp.status_code == 200:
-                ready = True
-                break
-        except Exception:
-            pass
-
-    if ready:
-        console.print(Panel(
-            f"[bold green]● Server is running[/bold green]\n\n"
-            f"  API:  [cyan]http://{_host}:{_port}/api[/cyan]\n"
-            f"  WS:   [cyan]ws://{_host}:{_port}/api/chat/ws[/cyan]\n\n"
-            f"[dim]Run [bold cyan]dione client[/bold cyan] to start chatting\n"
-            f"Run [bold cyan]dione stop[/bold cyan] to stop the server[/dim]",
-            title="🌙 Dione AI",
-            border_style="green",
-            box=box.ROUNDED,
-        ))
-    else:
-        console.print("[yellow]Server is starting up (may take a few more seconds)...[/yellow]")
-        console.print(f"[dim]Run [cyan]dione status[/cyan] to check, or [cyan]dione client[/cyan] to connect.[/dim]")
 
 
 @app.command()
