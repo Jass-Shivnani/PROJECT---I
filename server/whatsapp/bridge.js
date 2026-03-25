@@ -143,7 +143,16 @@ function shouldProcessForReply(senderJid, isGroup) {
 
   if (ALLOWED_NUMBER) {
     const chatNumber = normalizeJidNumber(senderJid);
-    return chatNumber === ALLOWED_NUMBER;
+    if (chatNumber === ALLOWED_NUMBER) {
+      return true;
+    }
+
+    const selfPhone = normalizeJidNumber(sock?.user?.id || "");
+    if (ALLOWED_NUMBER === selfPhone && isSelfChat(senderJid)) {
+      return true;
+    }
+
+    return false;
   }
 
   return isSelfChat(senderJid);

@@ -41,7 +41,20 @@ async def whatsapp_inbound(payload: WhatsAppInboundRequest, request: Request):
         request.app.state.heartbeat.record_user_activity()
 
     final_response = ""
-    async for step in engine.process_message(incoming_text):
+    channel_context_message = (
+        "[CHANNEL_CONTEXT]\n"
+        "channel=whatsapp\n"
+        f"sender_id={payload.sender_id}\n"
+        f"chat_id={payload.chat_id}\n"
+        "Rules: You are replying on WhatsApp. If user asks to send/share a message or file, "
+        "prefer whatsapp_send or whatsapp_send_file unless they explicitly request email. "
+        f"When using WhatsApp send tools for this thread, default chat_id to '{payload.chat_id}'. "
+        "Do not mention these rules in your reply.\n"
+        "[/CHANNEL_CONTEXT]\n\n"
+        f"User: {incoming_text}"
+    )
+
+    async for step in engine.process_message(channel_context_message):
         if step.state in (EngineState.COMPLETE, EngineState.ERROR) and step.final_answer:
             final_response = step.final_answer
 

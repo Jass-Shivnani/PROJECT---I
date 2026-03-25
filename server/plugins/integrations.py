@@ -513,6 +513,7 @@ class IntegrationRegistry:
 
         if tool_name == "whatsapp_send" and hasattr(integration, "send_message"):
             to_value = str(params.get("to", "")).strip()
+            chat_id_value = str(params.get("chat_id", "")).strip()
             text_value = str(
                 params.get("text")
                 or params.get("message")
@@ -525,11 +526,12 @@ class IntegrationRegistry:
             caption = str(params.get("caption", "")).strip()
             mime_type = str(params.get("mime_type", "")).strip()
 
-            if not to_value or (not text_value and not file_path):
-                raise RuntimeError("whatsapp_send requires 'to' and either 'text' or 'file_path'")
+            if (not to_value and not chat_id_value) or (not text_value and not file_path):
+                raise RuntimeError("whatsapp_send requires ('to' or 'chat_id') and either 'text' or 'file_path'")
 
             result = await integration.send_message(
                 to=to_value,
+                chat_id=chat_id_value,
                 text=text_value,
                 file_path=file_path,
                 caption=caption,
@@ -541,14 +543,16 @@ class IntegrationRegistry:
 
         if tool_name == "whatsapp_send_file" and hasattr(integration, "send_message"):
             to_value = str(params.get("to", "")).strip()
+            chat_id_value = str(params.get("chat_id", "")).strip()
             file_path, matched = self._resolve_file_from_params(params)
-            if not to_value or not file_path:
-                raise RuntimeError("whatsapp_send_file requires both 'to' and 'file_path'")
+            if (not to_value and not chat_id_value) or not file_path:
+                raise RuntimeError("whatsapp_send_file requires ('to' or 'chat_id') and 'file_path'")
 
             caption_value = str(params.get("caption") or params.get("text") or "").strip()
             mime_type = str(params.get("mime_type", "")).strip()
             result = await integration.send_message(
                 to=to_value,
+                chat_id=chat_id_value,
                 text="",
                 file_path=file_path,
                 caption=caption_value,
@@ -1588,7 +1592,8 @@ class WhatsAppIntegration(BaseIntegration):
     async def send_message(
         self,
         to: str,
-        text: str,
+        chat_id: str = "",
+        text: str = "",
         file_path: str = "",
         caption: str = "",
         mime_type: str = "",
@@ -1618,6 +1623,7 @@ class WhatsAppIntegration(BaseIntegration):
 
             result = await bridge.send_message(
                 to=to,
+                chat_id=chat_id,
                 text=text,
                 file_path=file_path,
                 caption=caption,
@@ -1636,6 +1642,7 @@ class WhatsAppIntegration(BaseIntegration):
                 "description": "Send a WhatsApp message or file",
                 "parameters": {
                     "to": {"type": "string", "description": "Phone number (with country code)"},
+                    "chat_id": {"type": "string", "description": "Optional WhatsApp chat JID (preferred for in-channel replies)"},
                     "text": {"type": "string", "description": "Message text (optional if sending a file)"},
                     "file_path": {"type": "string", "description": "Optional local file path to send"},
                     "file_query": {"type": "string", "description": "Optional filename/path search query to auto-find file"},
@@ -1650,6 +1657,7 @@ class WhatsAppIntegration(BaseIntegration):
                 "description": "Send an actual local file over WhatsApp (not file contents)",
                 "parameters": {
                     "to": {"type": "string", "description": "Phone number (with country code)"},
+                    "chat_id": {"type": "string", "description": "Optional WhatsApp chat JID (preferred for in-channel replies)"},
                     "file_path": {"type": "string", "description": "Local file path to send"},
                     "file_query": {"type": "string", "description": "Optional filename/path search query if file_path unknown"},
                     "search_root": {"type": "string", "description": "Optional root directory for file_query"},
