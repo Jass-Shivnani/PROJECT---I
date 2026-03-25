@@ -78,6 +78,29 @@ function buildMediaPayload(fileBuffer, filePath, mimeType, caption = "") {
   };
 }
 
+function normalizePhoneForLookup(value = "") {
+  return String(value).replace(/[^\d]/g, "").trim();
+}
+
+async function resolveTargetJid(to = "", chatId = "") {
+  if (chatId) return chatId;
+
+  const number = normalizePhoneForLookup(to);
+  if (!number) return "";
+
+  if (sock && typeof sock.onWhatsApp === "function") {
+    try {
+      const candidates = await sock.onWhatsApp(number);
+      const jid = candidates?.[0]?.jid;
+      if (jid) return jid;
+    } catch (error) {
+      console.log(`[whatsapp-bridge] onWhatsApp lookup failed for ${number}: ${error.message}`);
+    }
+  }
+
+  return `${number}@s.whatsapp.net`;
+}
+
 function normalizeJidNumber(jid = "") {
   return String(jid)
     .split(":")[0]
@@ -322,7 +345,7 @@ const server = createServer(async (req, res) => {
 
     const body = await parseBody(req);
     const { to, text, chat_id, file_path, caption, mime_type } = body;
-    const jid = chat_id || (to ? `${to.replace("+", "")}@s.whatsapp.net` : "");
+    const jid = await resolveTargetJid(to, chat_id);
 
     if (!jid || (!text && !file_path)) {
       res.statusCode = 400;

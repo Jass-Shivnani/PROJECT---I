@@ -436,6 +436,10 @@ def integrations(
         elif integration_id == "whatsapp":
             console.print("[bold]WhatsApp Web bridge login[/bold]")
             console.print("[dim]This starts a local Node.js bridge and generates QR for WhatsApp linking.[/dim]")
+            params["reset_session"] = Confirm.ask(
+                "Reset existing WhatsApp pairing before connecting? (recommended if messages are stuck)",
+                default=True,
+            )
             params["dione_port"] = int(Prompt.ask("Dione port", default="8900"))
             params["bridge_port"] = int(Prompt.ask("Bridge port", default="8901"))
             params["allowed_number"] = Prompt.ask(

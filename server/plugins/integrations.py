@@ -1488,6 +1488,7 @@ class WhatsAppIntegration(BaseIntegration):
     
     async def authenticate(self, params: dict[str, Any]) -> bool:
         try:
+            import shutil
             from server.whatsapp import get_bridge
 
             dione_port = int(params.get("dione_port", 8900))
@@ -1500,6 +1501,15 @@ class WhatsAppIntegration(BaseIntegration):
                 allowed_chat_id=allowed_chat_id,
                 allowed_number=allowed_number,
             )
+
+            if bool(params.get("reset_session", False)):
+                try:
+                    bridge.stop()
+                except Exception:
+                    pass
+                auth_dir = Path("data") / "whatsapp_auth"
+                if auth_dir.exists():
+                    shutil.rmtree(auth_dir, ignore_errors=True)
 
             started = bridge.start()
             if not started:
