@@ -4,7 +4,7 @@
 
 import { default as makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } from "@whiskeysockets/baileys";
 import { createServer } from "node:http";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import QRCode from "qrcode";
@@ -31,6 +31,52 @@ let reconnectAttempts = 0;
 const selfIdentifiers = new Set();
 const MAX_RECONNECT = 10;
 const RECONNECT_BASE_MS = 2000;
+
+const EXT_MIME_MAP = {
+  ".txt": "text/plain",
+  ".pdf": "application/pdf",
+  ".csv": "text/csv",
+  ".json": "application/json",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".png": "image/png",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".mp4": "video/mp4",
+  ".mov": "video/quicktime",
+  ".mp3": "audio/mpeg",
+  ".wav": "audio/wav",
+  ".zip": "application/zip",
+  ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+};
+
+function guessMimeType(filePath = "", explicitMime = "") {
+  if (explicitMime) return explicitMime;
+  const ext = path.extname(filePath || "").toLowerCase();
+  return EXT_MIME_MAP[ext] || "application/octet-stream";
+}
+
+function buildMediaPayload(fileBuffer, filePath, mimeType, caption = "") {
+  const finalMime = guessMimeType(filePath, mimeType);
+  const fileName = path.basename(filePath || "attachment");
+
+  if (finalMime.startsWith("image/")) {
+    return { image: fileBuffer, caption };
+  }
+  if (finalMime.startsWith("video/")) {
+    return { video: fileBuffer, caption };
+  }
+  if (finalMime.startsWith("audio/")) {
+    return { audio: fileBuffer, mimetype: finalMime, ptt: false };
+  }
+
+  return {
+    document: fileBuffer,
+    mimetype: finalMime,
+    fileName,
+    caption,
+  };
+}
 
 function normalizeJidNumber(jid = "") {
   return String(jid)
@@ -275,21 +321,38 @@ const server = createServer(async (req, res) => {
     }
 
     const body = await parseBody(req);
-    const { to, text, chat_id } = body;
+    const { to, text, chat_id, file_path, caption, mime_type } = body;
     const jid = chat_id || (to ? `${to.replace("+", "")}@s.whatsapp.net` : "");
 
-    if (!jid || !text) {
+    if (!jid || (!text && !file_path)) {
       res.statusCode = 400;
-      res.end(JSON.stringify({ error: "Missing 'to'/'chat_id' and 'text'" }));
+      res.end(JSON.stringify({ error: "Missing 'to'/'chat_id' and either 'text' or 'file_path'" }));
       return;
     }
 
     try {
       await sock.sendPresenceUpdate("composing", jid);
       await new Promise(r => setTimeout(r, 300));
-      const result = await sock.sendMessage(jid, { text });
+
+      let result;
+      if (file_path) {
+        const absPath = path.isAbsolute(file_path)
+          ? file_path
+          : path.resolve(process.cwd(), file_path);
+        const fileBuffer = await readFile(absPath);
+        const payload = buildMediaPayload(
+          fileBuffer,
+          absPath,
+          String(mime_type || "").trim(),
+          String(caption || text || "").trim(),
+        );
+        result = await sock.sendMessage(jid, payload);
+      } else {
+        result = await sock.sendMessage(jid, { text });
+      }
+
       await sock.sendPresenceUpdate("paused", jid);
-      res.end(JSON.stringify({ ok: true, messageId: result?.key?.id }));
+      res.end(JSON.stringify({ ok: true, messageId: result?.key?.id, hasFile: Boolean(file_path) }));
     } catch (err) {
       res.statusCode = 500;
       res.end(JSON.stringify({ error: err.message }));

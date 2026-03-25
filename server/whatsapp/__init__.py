@@ -27,6 +27,7 @@ DEFAULT_BRIDGE_PORT = 8901
 BRIDGE_DIR = Path(__file__).parent
 BRIDGE_SCRIPT = BRIDGE_DIR / "bridge.js"
 NODE_MODULES = BRIDGE_DIR / "node_modules"
+PROJECT_ROOT = BRIDGE_DIR.parent.parent
 
 
 def _get_auth_dir():
@@ -215,13 +216,35 @@ class WhatsAppBridge:
                 return {"qr": None, "status": "bridge_not_running"}
             return {"qr": None, "status": "error", "error": str(e)}
 
-    async def send_message(self, to: str, text: str, chat_id: str = "") -> dict:
+    async def send_message(
+        self,
+        to: str,
+        text: str = "",
+        chat_id: str = "",
+        file_path: str = "",
+        caption: str = "",
+        mime_type: str = "",
+    ) -> dict:
         try:
+            resolved_file_path = file_path
+            if file_path:
+                fp = Path(file_path).expanduser()
+                if not fp.is_absolute():
+                    fp = (PROJECT_ROOT / fp).resolve()
+                resolved_file_path = str(fp)
+
             async with httpx.AsyncClient() as client:
                 resp = await client.post(
                     f"{self.base_url}/send",
-                    json={"to": to, "text": text, "chat_id": chat_id},
-                    timeout=15,
+                    json={
+                        "to": to,
+                        "text": text,
+                        "chat_id": chat_id,
+                        "file_path": resolved_file_path,
+                        "caption": caption,
+                        "mime_type": mime_type,
+                    },
+                    timeout=60,
                 )
                 return resp.json()
         except Exception as e:

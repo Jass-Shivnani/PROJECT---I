@@ -8,6 +8,7 @@ so we can intercept errors and present them to the user instantly.
 """
 
 import asyncio
+import os
 import re
 import time
 from typing import AsyncGenerator
@@ -26,6 +27,7 @@ class CopilotAdapter(BaseLLMAdapter):
     def __init__(self, model: str = "gpt-5-mini", **kwargs):
         self.model = self._normalize_model(model)
         self._cli_path = None
+        self._timeout_seconds = float(os.getenv("DIONE_COPILOT_TIMEOUT", "180"))
         logger.info(f"Copilot Subprocess adapter created: model={self.model}")
 
     def _normalize_model(self, model: str) -> str:
@@ -49,7 +51,7 @@ class CopilotAdapter(BaseLLMAdapter):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=90.0)
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=self._timeout_seconds)
         return process.returncode, stdout.decode().strip(), stderr.decode().strip()
 
     def _ensure_cli(self) -> str:
@@ -148,8 +150,8 @@ class CopilotAdapter(BaseLLMAdapter):
             )
 
         except asyncio.TimeoutError:
-            logger.error("Copilot CLI subprocess timed out after 90s")
-            return LLMResponse(content="Copilot timed out after 90 seconds.", model=self.model)
+            logger.error(f"Copilot CLI subprocess timed out after {self._timeout_seconds:.0f}s")
+            return LLMResponse(content=f"Copilot timed out after {self._timeout_seconds:.0f} seconds.", model=self.model)
         except Exception as e:
             logger.error(f"Error running Copilot CLI: {e}")
             return LLMResponse(content=f"Copilot Error: {e}", model=self.model)

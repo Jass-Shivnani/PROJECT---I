@@ -13,6 +13,7 @@ import json
 import hashlib
 import secrets
 import asyncio
+import mimetypes
 from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 import io
@@ -409,10 +410,46 @@ class IntegrationRegistry:
             )
 
         if tool_name == "gmail_send" and hasattr(integration, "send_email"):
+            attachments = params.get("attachments", [])
+            if isinstance(attachments, str):
+                attachments = [attachments]
+            if not isinstance(attachments, list):
+                attachments = []
+
+            file_path = str(
+                params.get("file_path")
+                or params.get("attachment")
+                or params.get("path")
+                or ""
+            ).strip()
+            if file_path:
+                attachments = [file_path, *[a for a in attachments if a != file_path]]
+
             return await integration.send_email(
                 to=str(params.get("to", "")).strip(),
                 subject=str(params.get("subject", "")).strip(),
                 body=str(params.get("body", "")).strip(),
+                attachments=[str(a).strip() for a in attachments if str(a).strip()],
+            )
+
+        if tool_name == "gmail_send_file" and hasattr(integration, "send_email"):
+            to_value = str(params.get("to", "")).strip()
+            file_path = str(
+                params.get("file_path")
+                or params.get("attachment")
+                or params.get("path")
+                or ""
+            ).strip()
+            if not to_value or not file_path:
+                raise RuntimeError("gmail_send_file requires both 'to' and 'file_path'")
+
+            subject_value = str(params.get("subject", "File from Dione")).strip() or "File from Dione"
+            body_value = str(params.get("body", "Attached file from Dione.")).strip()
+            return await integration.send_email(
+                to=to_value,
+                subject=subject_value,
+                body=body_value,
+                attachments=[file_path],
             )
 
         if tool_name == "gmail_unread_count" and hasattr(integration, "sync"):
@@ -438,13 +475,47 @@ class IntegrationRegistry:
                 or params.get("body")
                 or ""
             ).strip()
+            file_path = str(params.get("file_path", "")).strip()
+            if not file_path:
+                file_path = str(
+                    params.get("attachment")
+                    or params.get("path")
+                    or params.get("file")
+                    or ""
+                ).strip()
+            caption = str(params.get("caption", "")).strip()
+            mime_type = str(params.get("mime_type", "")).strip()
 
-            if not to_value or not text_value:
-                raise RuntimeError("whatsapp_send requires both 'to' and 'text'")
+            if not to_value or (not text_value and not file_path):
+                raise RuntimeError("whatsapp_send requires 'to' and either 'text' or 'file_path'")
 
             return await integration.send_message(
                 to=to_value,
                 text=text_value,
+                file_path=file_path,
+                caption=caption,
+                mime_type=mime_type,
+            )
+
+        if tool_name == "whatsapp_send_file" and hasattr(integration, "send_message"):
+            to_value = str(params.get("to", "")).strip()
+            file_path = str(
+                params.get("file_path")
+                or params.get("attachment")
+                or params.get("path")
+                or ""
+            ).strip()
+            if not to_value or not file_path:
+                raise RuntimeError("whatsapp_send_file requires both 'to' and 'file_path'")
+
+            caption_value = str(params.get("caption") or params.get("text") or "").strip()
+            mime_type = str(params.get("mime_type", "")).strip()
+            return await integration.send_message(
+                to=to_value,
+                text="",
+                file_path=file_path,
+                caption=caption_value,
+                mime_type=mime_type,
             )
 
         raise RuntimeError(f"Tool '{tool_name}' is not implemented for integration '{integration.INTEGRATION_ID}'")
@@ -890,7 +961,7 @@ class GoogleMailIntegration(BaseIntegration):
             logger.error(f"Gmail read error: {e}")
             return [{"error": str(e)}]
     
-    async def send_email(self, to: str, subject: str, body: str) -> dict:
+    async def send_email(self, to: str, subject: str, body: str, attachments: list[str] | None = None) -> dict:
         """Send an email via SMTP."""
         if not self.credentials:
             return {"success": False, "error": "Not authenticated"}
@@ -898,15 +969,43 @@ class GoogleMailIntegration(BaseIntegration):
             import smtplib
             from email.mime.text import MIMEText
             from email.mime.multipart import MIMEMultipart
+            from email.mime.base import MIMEBase
+            from email import encoders
             
             sender = self.credentials.extra.get("email", "")
             password = self.credentials.api_key
+            attachment_paths = attachments or []
             
             msg = MIMEMultipart()
             msg["From"] = sender
             msg["To"] = to
             msg["Subject"] = subject
             msg.attach(MIMEText(body, "plain"))
+
+            attached_files: list[str] = []
+            for raw_path in attachment_paths:
+                try:
+                    abs_path = Path(raw_path).expanduser().resolve()
+                    if not abs_path.exists() or not abs_path.is_file():
+                        logger.warning(f"Skipping missing attachment: {raw_path}")
+                        continue
+
+                    ctype, _ = mimetypes.guess_type(str(abs_path))
+                    if not ctype:
+                        ctype = "application/octet-stream"
+                    maintype, subtype = ctype.split("/", 1)
+
+                    with open(abs_path, "rb") as fh:
+                        payload = fh.read()
+
+                    part = MIMEBase(maintype, subtype)
+                    part.set_payload(payload)
+                    encoders.encode_base64(part)
+                    part.add_header("Content-Disposition", f'attachment; filename="{abs_path.name}"')
+                    msg.attach(part)
+                    attached_files.append(str(abs_path))
+                except Exception as attachment_error:
+                    logger.warning(f"Failed to attach file '{raw_path}': {attachment_error}")
             
             with smtplib.SMTP(self.SMTP_HOST, self.SMTP_PORT) as server:
                 server.starttls()
@@ -914,7 +1013,7 @@ class GoogleMailIntegration(BaseIntegration):
                 server.send_message(msg)
             
             logger.info(f"Email sent to {to}: {subject}")
-            return {"success": True, "to": to, "subject": subject}
+            return {"success": True, "to": to, "subject": subject, "attachments": attached_files}
         except Exception as e:
             logger.error(f"Gmail send error: {e}")
             return {"success": False, "error": str(e)}
@@ -971,11 +1070,24 @@ class GoogleMailIntegration(BaseIntegration):
             },
             {
                 "name": "gmail_send",
-                "description": "Compose and send an email via Gmail",
+                "description": "Compose and send an email via Gmail (supports file attachments)",
                 "parameters": {
                     "to": {"type": "string", "description": "Recipient email address"},
                     "subject": {"type": "string", "description": "Email subject line"},
                     "body": {"type": "string", "description": "Email body text"},
+                    "file_path": {"type": "string", "description": "Optional file path to attach"},
+                    "attachments": {"type": "array", "description": "Optional list of file paths to attach"},
+                },
+                "integration": self.INTEGRATION_ID,
+            },
+            {
+                "name": "gmail_send_file",
+                "description": "Send an email with an actual file attachment (not file contents)",
+                "parameters": {
+                    "to": {"type": "string", "description": "Recipient email address"},
+                    "file_path": {"type": "string", "description": "Local file path to attach"},
+                    "subject": {"type": "string", "description": "Optional email subject line"},
+                    "body": {"type": "string", "description": "Optional email body text"},
                 },
                 "integration": self.INTEGRATION_ID,
             },
@@ -1419,8 +1531,15 @@ class WhatsAppIntegration(BaseIntegration):
         except Exception as e:
             return {"status": "error", "error": str(e), "qr": None}
     
-    async def send_message(self, to: str, text: str) -> dict:
-        """Send a WhatsApp text message via bridge."""
+    async def send_message(
+        self,
+        to: str,
+        text: str,
+        file_path: str = "",
+        caption: str = "",
+        mime_type: str = "",
+    ) -> dict:
+        """Send a WhatsApp text or file message via bridge."""
         if not self.credentials:
             return {"success": False, "error": "Not authenticated"}
         try:
@@ -1429,7 +1548,13 @@ class WhatsAppIntegration(BaseIntegration):
             bridge = self._bridge_from_credentials()
             if bridge is None:
                 return {"success": False, "error": "Bridge not running"}
-            result = await bridge.send_message(to=to, text=text)
+            result = await bridge.send_message(
+                to=to,
+                text=text,
+                file_path=file_path,
+                caption=caption,
+                mime_type=mime_type,
+            )
             if result.get("error"):
                 return {"success": False, "error": result.get("error")}
             return {"success": bool(result.get("ok", False)), "response": result}
@@ -1440,10 +1565,24 @@ class WhatsAppIntegration(BaseIntegration):
         return [
             {
                 "name": "whatsapp_send",
-                "description": "Send a WhatsApp message",
+                "description": "Send a WhatsApp message or file",
                 "parameters": {
                     "to": {"type": "string", "description": "Phone number (with country code)"},
-                    "text": {"type": "string", "description": "Message text"},
+                    "text": {"type": "string", "description": "Message text (optional if sending a file)"},
+                    "file_path": {"type": "string", "description": "Optional local file path to send"},
+                    "caption": {"type": "string", "description": "Optional caption for the file"},
+                    "mime_type": {"type": "string", "description": "Optional MIME type override (example: image/png)"},
+                },
+                "integration": self.INTEGRATION_ID,
+            },
+            {
+                "name": "whatsapp_send_file",
+                "description": "Send an actual local file over WhatsApp (not file contents)",
+                "parameters": {
+                    "to": {"type": "string", "description": "Phone number (with country code)"},
+                    "file_path": {"type": "string", "description": "Local file path to send"},
+                    "caption": {"type": "string", "description": "Optional caption"},
+                    "mime_type": {"type": "string", "description": "Optional MIME type override"},
                 },
                 "integration": self.INTEGRATION_ID,
             },
