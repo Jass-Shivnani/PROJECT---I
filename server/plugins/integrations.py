@@ -237,6 +237,54 @@ class IntegrationRegistry:
         self._integrations: dict[str, BaseIntegration] = {}
         self._data_dir = Path(data_dir) / "integrations"
         self._data_dir.mkdir(parents=True, exist_ok=True)
+
+    def _find_files(self, query: str, search_root: str = ".", max_results: int = 10) -> list[str]:
+        root = Path(search_root).expanduser()
+        if not root.is_absolute():
+            root = (Path.cwd() / root).resolve()
+        if not root.exists() or not root.is_dir():
+            return []
+
+        normalized_query = query.strip().lower()
+        if not normalized_query:
+            return []
+
+        matches: list[tuple[int, str]] = []
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            rel = str(path.relative_to(root)).replace("\\", "/")
+            rel_lower = rel.lower()
+            score = rel_lower.find(normalized_query)
+            if score != -1:
+                matches.append((score + len(rel) // 100, str(path.resolve())))
+                if len(matches) >= max_results * 8:
+                    break
+
+        matches.sort(key=lambda item: item[0])
+        return [m[1] for m in matches[:max_results]]
+
+    def _resolve_file_from_params(self, params: dict[str, Any]) -> tuple[str, list[str]]:
+        file_path = str(
+            params.get("file_path")
+            or params.get("attachment")
+            or params.get("path")
+            or ""
+        ).strip()
+
+        if file_path:
+            fp = Path(file_path).expanduser()
+            if not fp.is_absolute():
+                fp = (Path.cwd() / fp).resolve()
+            return str(fp), []
+
+        file_query = str(params.get("file_query", "")).strip()
+        search_root = str(params.get("search_root", ".")).strip() or "."
+        if not file_query:
+            return "", []
+
+        matches = self._find_files(file_query, search_root=search_root, max_results=10)
+        return (matches[0] if matches else ""), matches
     
     def register(self, integration: BaseIntegration) -> None:
         """Register an integration."""
@@ -416,41 +464,37 @@ class IntegrationRegistry:
             if not isinstance(attachments, list):
                 attachments = []
 
-            file_path = str(
-                params.get("file_path")
-                or params.get("attachment")
-                or params.get("path")
-                or ""
-            ).strip()
+            file_path, matched = self._resolve_file_from_params(params)
             if file_path:
                 attachments = [file_path, *[a for a in attachments if a != file_path]]
 
-            return await integration.send_email(
+            result = await integration.send_email(
                 to=str(params.get("to", "")).strip(),
                 subject=str(params.get("subject", "")).strip(),
                 body=str(params.get("body", "")).strip(),
                 attachments=[str(a).strip() for a in attachments if str(a).strip()],
             )
+            if matched and isinstance(result, dict):
+                result["matched_files"] = matched
+            return result
 
         if tool_name == "gmail_send_file" and hasattr(integration, "send_email"):
             to_value = str(params.get("to", "")).strip()
-            file_path = str(
-                params.get("file_path")
-                or params.get("attachment")
-                or params.get("path")
-                or ""
-            ).strip()
+            file_path, matched = self._resolve_file_from_params(params)
             if not to_value or not file_path:
                 raise RuntimeError("gmail_send_file requires both 'to' and 'file_path'")
 
             subject_value = str(params.get("subject", "File from Dione")).strip() or "File from Dione"
             body_value = str(params.get("body", "Attached file from Dione.")).strip()
-            return await integration.send_email(
+            result = await integration.send_email(
                 to=to_value,
                 subject=subject_value,
                 body=body_value,
                 attachments=[file_path],
             )
+            if matched and isinstance(result, dict):
+                result["matched_files"] = matched
+            return result
 
         if tool_name == "gmail_unread_count" and hasattr(integration, "sync"):
             summary = await integration.sync()
@@ -475,48 +519,44 @@ class IntegrationRegistry:
                 or params.get("body")
                 or ""
             ).strip()
-            file_path = str(params.get("file_path", "")).strip()
+            file_path, matched = self._resolve_file_from_params(params)
             if not file_path:
-                file_path = str(
-                    params.get("attachment")
-                    or params.get("path")
-                    or params.get("file")
-                    or ""
-                ).strip()
+                file_path = str(params.get("file", "")).strip()
             caption = str(params.get("caption", "")).strip()
             mime_type = str(params.get("mime_type", "")).strip()
 
             if not to_value or (not text_value and not file_path):
                 raise RuntimeError("whatsapp_send requires 'to' and either 'text' or 'file_path'")
 
-            return await integration.send_message(
+            result = await integration.send_message(
                 to=to_value,
                 text=text_value,
                 file_path=file_path,
                 caption=caption,
                 mime_type=mime_type,
             )
+            if matched and isinstance(result, dict):
+                result["matched_files"] = matched
+            return result
 
         if tool_name == "whatsapp_send_file" and hasattr(integration, "send_message"):
             to_value = str(params.get("to", "")).strip()
-            file_path = str(
-                params.get("file_path")
-                or params.get("attachment")
-                or params.get("path")
-                or ""
-            ).strip()
+            file_path, matched = self._resolve_file_from_params(params)
             if not to_value or not file_path:
                 raise RuntimeError("whatsapp_send_file requires both 'to' and 'file_path'")
 
             caption_value = str(params.get("caption") or params.get("text") or "").strip()
             mime_type = str(params.get("mime_type", "")).strip()
-            return await integration.send_message(
+            result = await integration.send_message(
                 to=to_value,
                 text="",
                 file_path=file_path,
                 caption=caption_value,
                 mime_type=mime_type,
             )
+            if matched and isinstance(result, dict):
+                result["matched_files"] = matched
+            return result
 
         raise RuntimeError(f"Tool '{tool_name}' is not implemented for integration '{integration.INTEGRATION_ID}'")
     
@@ -1076,6 +1116,8 @@ class GoogleMailIntegration(BaseIntegration):
                     "subject": {"type": "string", "description": "Email subject line"},
                     "body": {"type": "string", "description": "Email body text"},
                     "file_path": {"type": "string", "description": "Optional file path to attach"},
+                    "file_query": {"type": "string", "description": "Optional filename/path search query to auto-find file"},
+                    "search_root": {"type": "string", "description": "Optional root directory for file_query (default current workspace)"},
                     "attachments": {"type": "array", "description": "Optional list of file paths to attach"},
                 },
                 "integration": self.INTEGRATION_ID,
@@ -1086,6 +1128,8 @@ class GoogleMailIntegration(BaseIntegration):
                 "parameters": {
                     "to": {"type": "string", "description": "Recipient email address"},
                     "file_path": {"type": "string", "description": "Local file path to attach"},
+                    "file_query": {"type": "string", "description": "Optional filename/path search query if file_path unknown"},
+                    "search_root": {"type": "string", "description": "Optional root directory for file_query"},
                     "subject": {"type": "string", "description": "Optional email subject line"},
                     "body": {"type": "string", "description": "Optional email body text"},
                 },
@@ -1548,6 +1592,20 @@ class WhatsAppIntegration(BaseIntegration):
             bridge = self._bridge_from_credentials()
             if bridge is None:
                 return {"success": False, "error": "Bridge not running"}
+
+            status = await bridge.get_status()
+            if status.get("status") != "connected":
+                for _ in range(15):
+                    await asyncio.sleep(1)
+                    status = await bridge.get_status()
+                    if status.get("status") == "connected":
+                        break
+
+            if status.get("status") != "connected":
+                if status.get("status") == "qr":
+                    return {"success": False, "error": "WhatsApp requires QR login before sending"}
+                return {"success": False, "error": f"WhatsApp not connected (status={status.get('status', 'unknown')})"}
+
             result = await bridge.send_message(
                 to=to,
                 text=text,
@@ -1570,6 +1628,8 @@ class WhatsAppIntegration(BaseIntegration):
                     "to": {"type": "string", "description": "Phone number (with country code)"},
                     "text": {"type": "string", "description": "Message text (optional if sending a file)"},
                     "file_path": {"type": "string", "description": "Optional local file path to send"},
+                    "file_query": {"type": "string", "description": "Optional filename/path search query to auto-find file"},
+                    "search_root": {"type": "string", "description": "Optional root directory for file_query"},
                     "caption": {"type": "string", "description": "Optional caption for the file"},
                     "mime_type": {"type": "string", "description": "Optional MIME type override (example: image/png)"},
                 },
@@ -1581,6 +1641,8 @@ class WhatsAppIntegration(BaseIntegration):
                 "parameters": {
                     "to": {"type": "string", "description": "Phone number (with country code)"},
                     "file_path": {"type": "string", "description": "Local file path to send"},
+                    "file_query": {"type": "string", "description": "Optional filename/path search query if file_path unknown"},
+                    "search_root": {"type": "string", "description": "Optional root directory for file_query"},
                     "caption": {"type": "string", "description": "Optional caption"},
                     "mime_type": {"type": "string", "description": "Optional MIME type override"},
                 },
