@@ -14,7 +14,7 @@ The engine implements the Reason-Act-Observe cycle:
 import json
 import re
 import asyncio
-from typing import Optional, AsyncGenerator
+from typing import Optional, AsyncGenerator, List, Dict, Any, Union
 from dataclasses import dataclass, field
 from enum import Enum
 from loguru import logger
@@ -70,6 +70,70 @@ class ConversationMessage:
     role: str       # "user", "assistant", "system", "observation"
     content: str
     metadata: dict = field(default_factory=dict)
+
+
+@dataclass
+class ContextItem:
+    """
+    Context item candidate for 0-1 Knapsack Context Allocation (Section III-B).
+    r_i: Relevance reward > 0
+    c_i: Token footprint cost > 0
+    """
+    id: str
+    content: str
+    relevance_reward: float
+    token_cost: int
+    category: str = "memory"
+
+
+def allocate_context_knapsack(
+    items: List[ContextItem],
+    budget: int = 6656,
+) -> List[ContextItem]:
+    """
+    Greedy 0-1 Knapsack Context Allocator with Single-Item Safeguard.
+    Solves: max sum(r_i * x_i) s.t. sum(c_i * x_i) <= C_budget.
+    Computes density rho_i = r_i / c_i, sorts descending, greedily packs S_greedy,
+    and safeguards with i* = argmax_{c_i <= budget} r_i.
+    Guarantees R(S*) >= 0.5 * R(OPT) in O(M log M) time.
+    """
+    if not items:
+        return []
+
+    # Filter out items that alone exceed the budget
+    feasible_items = [it for it in items if it.token_cost <= budget and it.token_cost > 0]
+    if not feasible_items:
+        return []
+
+    # 1. Greedy Density-based selection: rho_i = r_i / c_i
+    sorted_by_density = sorted(
+        feasible_items,
+        key=lambda it: (it.relevance_reward / it.token_cost),
+        reverse=True
+    )
+
+    s_greedy: List[ContextItem] = []
+    current_cost = 0
+    total_greedy_reward = 0.0
+
+    for it in sorted_by_density:
+        if current_cost + it.token_cost <= budget:
+            s_greedy.append(it)
+            current_cost += it.token_cost
+            total_greedy_reward += it.relevance_reward
+
+    # 2. Single most valuable feasible chunk: i* = argmax_{i: c_i <= budget} r_i
+    best_single = max(feasible_items, key=lambda it: it.relevance_reward)
+
+    # 3. Safeguard selection: S* = argmax_{S in {S_greedy, {i*}}} R(S)
+    if best_single.relevance_reward > total_greedy_reward:
+        logger.debug(
+            f"Knapsack Context Allocator: Single-item safeguard activated "
+            f"({best_single.id}: {best_single.relevance_reward:.2f} > greedy {total_greedy_reward:.2f})"
+        )
+        return [best_single]
+
+    return s_greedy
 
 
 class DioneEngine:
@@ -160,6 +224,70 @@ class DioneEngine:
         """Inject the UI directive builder."""
         self._ui_builder = ui_builder
         logger.info("UI directive builder connected")
+
+    # ------------------------------------------------------------------
+    # Context Knapsack Allocator (Section III-B)
+    # ------------------------------------------------------------------
+
+    def _knapsack_allocate_context(
+        self,
+        user_message: str,
+        kg_context: str,
+        memories: list,
+        budget: int = 6656,
+    ) -> list[str]:
+        """
+        Gathers candidate context items (dialogue turns, KG triples, RAG memory chunks)
+        and solves the 0-1 Knapsack Context Allocation problem (Section III-B).
+        """
+        candidates: list[ContextItem] = []
+
+        # 1. KG candidate triples/facts
+        if kg_context:
+            c_cost = max(1, len(str(kg_context)) // 4)
+            candidates.append(ContextItem(
+                id="kg_context",
+                content=f"[Knowledge Context: {kg_context}]",
+                relevance_reward=0.92,
+                token_cost=c_cost,
+                category="knowledge",
+            ))
+
+        # 2. Memory / RAG candidates
+        if memories:
+            for idx, mem in enumerate(memories):
+                if isinstance(mem, dict):
+                    mem_str = mem.get("text", str(mem))
+                    dist = float(mem.get("distance", 0.5))
+                    score = max(0.05, 1.0 - dist)
+                else:
+                    mem_str = str(mem)
+                    score = max(0.05, 0.85 - (idx * 0.05))
+                c_cost = max(1, len(mem_str) // 4)
+                candidates.append(ContextItem(
+                    id=f"memory_{idx}",
+                    content=f"[Memory: {mem_str}]",
+                    relevance_reward=float(score),
+                    token_cost=c_cost,
+                    category="memory",
+                ))
+
+        # 3. Prior conversation turns (recency weighted)
+        for idx, turn in enumerate(self._conversation_history[:-1]):
+            turn_str = f"[{turn.role}]: {turn.content}"
+            c_cost = max(1, len(turn_str) // 4)
+            distance = len(self._conversation_history) - idx
+            reward = 1.0 / (1.0 + 0.15 * distance)
+            candidates.append(ContextItem(
+                id=f"history_turn_{idx}",
+                content=turn_str,
+                relevance_reward=reward,
+                token_cost=c_cost,
+                category="dialogue",
+            ))
+
+        selected = allocate_context_knapsack(candidates, budget=budget)
+        return [item.content for item in selected]
 
     # ------------------------------------------------------------------
     # System prompt construction
@@ -340,21 +468,25 @@ Respond with a JSON object:
             await self._profile_manager.learn_from_message(user_message, "user")
 
         # Step 2: Query knowledge graph for relevant context
-        knowledge_context = ""
+        kg_results = ""
         if self._knowledge_graph:
             kg_results = await self._knowledge_graph.query_relevant(user_message)
-            if kg_results:
-                knowledge_context = f"\n[Knowledge Context: {kg_results}]"
 
         # Step 3: Retrieve relevant memories (RAG)
-        memory_context = ""
+        memories = []
         if self._memory_manager:
             memories = await self._memory_manager.recall(user_message)
-            if memories:
-                memory_context = f"\n[Relevant Memories: {memories}]"
 
-        # Build enriched context
-        enriched_message = f"{user_message}{sentiment_context}{knowledge_context}{memory_context}"
+        # Step 3b: 0-1 Knapsack Context Allocation (Section III-B)
+        budget = getattr(self.settings.memory, "max_context_tokens", 6656) or 6656
+        allocated_chunks = self._knapsack_allocate_context(
+            user_message=user_message,
+            kg_context=kg_results,
+            memories=memories if isinstance(memories, list) else [memories] if memories else [],
+            budget=budget
+        )
+        context_payload = ("\n" + "\n".join(allocated_chunks)) if allocated_chunks else ""
+        enriched_message = f"{user_message}{sentiment_context}{context_payload}".strip()
 
         # Step 4: Enter the ReAct loop
         step_number = 0
@@ -533,14 +665,19 @@ Respond with a JSON object:
     # ------------------------------------------------------------------
 
     def _build_llm_messages(self, enriched_message: str) -> list[dict]:
-        """Build the message list for the LLM."""
+        """Build the message list for the LLM using knapsack-allocated context."""
         messages = [{"role": "system", "content": self._build_system_prompt()}]
 
-        for msg in self._conversation_history:
+        for idx, msg in enumerate(self._conversation_history):
             if msg.role == "observation":
                 messages.append({
                     "role": "user",
                     "content": f"[Tool Result]: {msg.content}",
+                })
+            elif idx == len(self._conversation_history) - 1 and msg.role == "user" and enriched_message:
+                messages.append({
+                    "role": "user",
+                    "content": enriched_message,
                 })
             else:
                 messages.append({

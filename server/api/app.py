@@ -127,6 +127,18 @@ async def lifespan(app: FastAPI):
     engine.set_heartbeat(heartbeat)
     engine.set_ui_builder(ui_builder)
 
+    # 11b. Microsoft Agent Framework (MAF 1.21.0) Enterprise Engine
+    maf_engine = None
+    try:
+        from server.core.maf_engine import MAFEngine
+        maf_engine = MAFEngine(knowledge_graph=knowledge)
+        logger.info("✨ Microsoft Agent Framework (MAF 1.21.0) Enterprise Engine active")
+        if os.getenv("DIONE_USE_MAF", "").lower() in ("1", "true", "yes"):
+            engine = maf_engine
+            logger.info("✨ Default agent execution routed to Microsoft Agent Framework (MAFEngine)")
+    except Exception as maf_err:
+        logger.warning(f"MAF Engine optional initialization note: {maf_err}")
+
     # 12. Integrations (Gmail, Drive, etc.)
     logger.info("Initializing integrations...")
     integrations = create_default_registry(data_dir="data")
@@ -155,6 +167,7 @@ async def lifespan(app: FastAPI):
 
     # Store on app state for route access
     app.state.engine = engine
+    app.state.maf_engine = maf_engine
     app.state.llm = llm
     app.state.memory = memory
     app.state.knowledge = knowledge

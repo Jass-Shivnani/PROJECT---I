@@ -14,6 +14,36 @@ from loguru import logger
 from server.config import get_settings
 
 
+from enum import IntEnum
+
+class PermissionTier(IntEnum):
+    """
+    5-Tier Poset Permission Lattice:
+    NONE < READ < WRITE < EXECUTE < FULL
+    """
+    NONE = 0
+    READ = 1
+    WRITE = 2
+    EXECUTE = 3
+    FULL = 4
+
+    def __le__(self, other: "PermissionTier") -> bool:
+        return self.value <= other.value
+
+    def __ge__(self, other: "PermissionTier") -> bool:
+        return self.value >= other.value
+
+    @classmethod
+    def join(cls, a: "PermissionTier", b: "PermissionTier") -> "PermissionTier":
+        """Lattice least upper bound (join): a ∨ b"""
+        return cls(max(a.value, b.value))
+
+    @classmethod
+    def meet(cls, a: "PermissionTier", b: "PermissionTier") -> "PermissionTier":
+        """Lattice greatest lower bound (meet): a ∧ b"""
+        return cls(min(a.value, b.value))
+
+
 @dataclass
 class SafetyCheckResult:
     """Result of a safety validation."""
@@ -21,6 +51,7 @@ class SafetyCheckResult:
     needs_confirmation: bool = False
     reason: Optional[str] = None
     risk_level: str = "low"  # low, medium, high, critical
+    required_tier: PermissionTier = PermissionTier.READ
 
 
 class SafetyKernel:
@@ -28,14 +59,15 @@ class SafetyKernel:
     The safety layer that sits between the LLM and plugin execution.
     
     Responsibilities:
-    - Block obviously dangerous commands
+    - Enforce 5-tier poset permission lattice (NONE < READ < WRITE < EXECUTE < FULL)
+    - Block obviously dangerous commands via AST & regex sanitization
     - Require confirmation for destructive operations
-    - Sanitize inputs before they reach plugins
     - Detect prompt injection attempts in tool parameters
     """
 
-    def __init__(self):
+    def __init__(self, max_autonomous_tier: PermissionTier = PermissionTier.READ):
         self.settings = get_settings()
+        self.max_autonomous_tier = max_autonomous_tier
         self._blocked_patterns = [
             re.compile(p, re.IGNORECASE)
             for p in self.settings.security.blocked_patterns
@@ -43,6 +75,18 @@ class SafetyKernel:
         self._confirmation_required = set(
             self.settings.security.require_confirmation_for
         )
+        self._category_tier_map = {
+            "read": PermissionTier.READ,
+            "list": PermissionTier.READ,
+            "search": PermissionTier.READ,
+            "query": PermissionTier.READ,
+            "write": PermissionTier.WRITE,
+            "send": PermissionTier.WRITE,
+            "execute": PermissionTier.EXECUTE,
+            "desktop_automation": PermissionTier.EXECUTE,
+            "delete": PermissionTier.FULL,
+            "system_alteration": PermissionTier.FULL,
+        }
 
     def validate_tool_call(self, tool_call) -> SafetyCheckResult:
         """
@@ -70,17 +114,20 @@ class SafetyKernel:
                     risk_level="critical",
                 )
 
-        # Check 3: Does this tool category require confirmation?
+        # Check 3: 5-Tier Poset Permission Lattice verification
         tool_category = self._categorize_tool(tool_name)
-        if tool_category in self._confirmation_required:
+        required_tier = self._category_tier_map.get(tool_category, PermissionTier.EXECUTE)
+        
+        if tool_category in self._confirmation_required or (required_tier > self.max_autonomous_tier):
             logger.info(
-                f"Confirmation required for {tool_name} (category: {tool_category})"
+                f"Lattice gate: Confirmation required for {tool_name} (category: {tool_category}, tier: {required_tier.name})"
             )
             return SafetyCheckResult(
                 allowed=True,
                 needs_confirmation=True,
-                reason=f"This action ({tool_category}) requires your confirmation.",
+                reason=f"This action ({tool_category}, tier: {required_tier.name}) requires your confirmation.",
                 risk_level="high",
+                required_tier=required_tier,
             )
 
         # Check 4: Scan for potential prompt injection in parameters

@@ -1,5 +1,5 @@
 """
-Dione AI — Microsoft Agent Framework (MAF 1.20.0) Enterprise Engine
+Dione AI — Microsoft Agent Framework (MAF 1.21.0) Enterprise Engine
 ====================================================================
 Integrates Microsoft Agent Framework as Dione's core runtime orchestrator:
 - Agent orchestration via `agent_framework.Agent`
@@ -328,14 +328,14 @@ class MAFEngine:
             "widgets": [
                 {"type": "chat_bubble", "role": "assistant", "text": response_text}
             ],
-            "framework": "Microsoft Agent Framework (MAF 1.20.0)",
+            "framework": "Microsoft Agent Framework (MAF 1.21.0)",
             "tools_invoked": tools_used or _CURRENT_TOOLS_INVOKED
         }
 
     def get_system_state(self) -> Dict[str, Any]:
         """Return engine state for telemetry."""
         return {
-            "engine": "Microsoft Agent Framework (MAF 1.20.0)",
+            "engine": "Microsoft Agent Framework (MAF 1.21.0)",
             "model": self.model_name,
             "status": "ready",
             "active_tools": len(self.tools),

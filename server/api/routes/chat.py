@@ -57,6 +57,8 @@ async def chat_message(req: ChatRequest, request: Request):
     use the WebSocket at /api/chat/ws instead.
     """
     engine = request.app.state.engine
+    if request.headers.get("X-Agent-Framework", "").lower() in ("maf", "microsoft") and getattr(request.app.state, "maf_engine", None):
+        engine = request.app.state.maf_engine
     memory = request.app.state.memory
 
     start = time.monotonic()
