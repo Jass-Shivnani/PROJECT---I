@@ -8,5 +8,8 @@
 | Affective & Emotional Modeling | Multi-Axis: Emotion (9 labels) + Urgency + Importance | None | None | None | Static Agent Persona Prompting |
 | Privacy & Offline Autonomy | 100% Local Inference (Ollama / Llama.cpp / Copilot Subprocess) | Local and Cloud Gateway Endpoints | Server-Client API (Supports Local Endpoints) | Cloud API Dependent (OpenAI/Anthropic) | Framework / SDK (Model Agnostic) |
 | Safety & Permission Gates | 5-Tier Permission Manifest + Interactive Confirmation Gate | Docker Sandboxing + Tool Allow/Deny Lists | Function Call Parameter Filtering | Manual Terminal CLI Prompt / Loop Counter | Code-level Guardrails / Human-in-the-Loop Node |
-| Disambiguation Precision @ Session 5 | 93.2% [Empirically Validated] | 31.5% [Degrades via string matching] | 76.5% (Packer et al., arXiv:2310.08560) | 34.8% (Dense RAG Baseline) | 52.0% (State Graph Node) |
-| Active Host RAM Footprint | 463.1 MB [Live Measured via psutil] | 520.0 MB (Node.js Gateway) | 890.0 MB (FastAPI + SQL/Vector Server) | 1340.0 MB (Python Multi-Threaded Loop) | 1150.0 MB (Multi-Agent State Orchestrator) |
+| Longitudinal Recall @ Session 5 | 34.5% (Trails MemGPT & Dense RAG; decays from 78.5%) | 31.5% (Flat Log Degradation) | 76.5% (Packer et al., 2023, Winner) | 46.1% (Dense RAG Baseline) | 52.0% (State Graph Node) |
+| Active Host RAM Footprint | 463.1 MB (Hybrid Cloud) / 5,313 MB (On-Device Ollama 8B, Heaviest) | 520.0 MB (Node.js Gateway) | 890.0 MB (FastAPI + SQL/Vector Server) | 1340.0 MB (Python Multi-Threaded Loop) | 1150.0 MB (Multi-Agent State Orchestrator) |
+| Standardized Task Completion Rate | 27.6% (Host ReAct Prototype, Lowest) | N/A (Scripted Hooks) | 48.2% (Single Agent) | 34.8% (Liu et al., 2023) | 57.3% (Multi-Agent Graph, Winner) |
+| Host Tool Throughput | 5.2 ops/s (AST & Modal Gated Bottleneck) | 18.5 ops/s (Lightweight Node.js, Winner) | 6.4 ops/s | 1.2 ops/s | 7.8 ops/s |
+| Adversarial Security Defense Rate | 62.0% (38.0% Vulnerability Gap) | Docker Sandbox (No Prompt Filtering) | Parameter Validation (25.0%) | Manual CLI Prompt (8.8%) | Code-level Guardrails (35.0%) |
