@@ -12,6 +12,7 @@ The engine implements the Reason-Act-Observe cycle:
 """
 
 import json
+import re
 import asyncio
 from typing import Optional, AsyncGenerator
 from dataclasses import dataclass, field
@@ -295,7 +296,9 @@ Respond with a JSON object:
     # Core ReAct Loop
     # ------------------------------------------------------------------
 
-    async def process_message(self, user_message: str) -> AsyncGenerator[EngineStep, None]:
+    async def process_message(
+        self, user_message: str, conversation_id: Optional[str] = None
+    ) -> AsyncGenerator[EngineStep, None]:
         """
         Process a user message through the ReAct loop.
         

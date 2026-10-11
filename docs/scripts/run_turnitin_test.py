@@ -1,7 +1,7 @@
 import os, re, math, shutil
 from datetime import datetime
 from reportlab.lib import colors
-from reportlab.lib.pagesizes import letter
+from reportlab.lib.pagesizes import A4
 from reportlab.platypus import (
     SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak, KeepTogether, HRFlowable
 )
@@ -70,11 +70,11 @@ def run_turnitin_simulation():
     if similarity_ex_bib < 1.8:
         similarity_ex_bib = 2.4
 
-    # Generate ReportLab PDF
+    # Generate ReportLab PDF (ISO A4)
     pdf_path = 'docs/DIONE_TURNITIN_SIMILARITY_REPORT.pdf'
     doc = SimpleDocTemplate(
         pdf_path,
-        pagesize=letter,
+        pagesize=A4,
         leftMargin=36,
         rightMargin=36,
         topMargin=36,
@@ -290,10 +290,15 @@ def run_turnitin_simulation():
     doc.build(story)
     print(f"Generated Turnitin report at: {pdf_path}")
 
-    # Copy to user Downloads
+    # Save and Copy A4 reports
+    a4_path = 'docs/DIONE_TURNITIN_SIMILARITY_REPORT_A4.pdf'
+    shutil.copy2(pdf_path, a4_path)
+
     dl_path = os.path.expanduser('~/Downloads/DIONE_TURNITIN_SIMILARITY_REPORT.pdf')
+    dl_a4_path = os.path.expanduser('~/Downloads/DIONE_TURNITIN_SIMILARITY_REPORT_A4.pdf')
     shutil.copy2(pdf_path, dl_path)
-    print(f"Copied to user Downloads at: {dl_path}")
+    shutil.copy2(a4_path, dl_a4_path)
+    print(f"Copied A4 Turnitin reports to user Downloads: {dl_a4_path}")
 
 if __name__ == '__main__':
     run_turnitin_simulation()

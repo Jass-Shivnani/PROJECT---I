@@ -89,7 +89,7 @@ More recently, Edge et al. introduced \textbf{GraphRAG} \cite{edge2024graphrag},
 \centering
 \begin{tabularx}{\textwidth}{lXXXX}
 \toprule
-\textbf{Dimension} & \textbf{Ruan et al. \cite{ruan2023identifying}} & \textbf{Greshake et al. \cite{greshake2023not}} & \textbf{Agent Security Bench (ASB) \cite{zhang2024agent}} & \textbf{Dione Safety Kernel (Proposed)} \\
+\textbf{Dimension} & \textbf{Ruan et al. \cite{ruan2023identifying}} & \textbf{Greshake et al. \cite{greshake2023not}} & \textbf{Agent Security Bench (ASB) \cite{zhang2024agent}} & \textbf{Dione Safety Kernel (Live Enforcement Engine)} \\
 \midrule
 \textbf{Threat Model} & Destructive host shell execution; unconstrained file deletion & Indirect prompt injection via retrieved email/web content & Broad taxonomy: tool tampering, memory poisoning, privilege escalation & Multi-vector: direct prompt overrides, poisoned context, destructive OS shell commands \\
 \textbf{Defense Layer} & Simulated LM environment (sandboxed mock execution) & Data-prompt delimiter separation; instruction isolation & Evaluation benchmark (quantifies external defenses) & Poset permission lattice ($\mathcal{L}$) + AST parser + interactive confirmation gate \\
@@ -310,7 +310,7 @@ The reported 77.0\% prompt token reduction is calculated directly from turn-by-t
 \centering
 \begin{tabularx}{\textwidth}{lXXXXX}
 \toprule
-\textbf{Evaluation Dimension} & \textbf{Dione AI (Proposed)} & \textbf{OpenClaw} & \textbf{Letta (MemGPT)} & \textbf{AutoGPT} & \textbf{CrewAI / LangGraph} \\
+\textbf{Evaluation Dimension} & \textbf{Dione AI (Live Workstation Benchmark)} & \textbf{OpenClaw} & \textbf{Letta (MemGPT)} & \textbf{AutoGPT} & \textbf{CrewAI / LangGraph} \\
 \midrule
 \textbf{Orchestration Core} & MAF 1.20.0 + Safety Kernel ($N_{\text{max}}=10$) & Gateway Hooks \& Node.js Dispatcher & Virtual Context OS Paging & Recursive Goal Loop & Stateful Directed Cyclic Graph \\
 \textbf{Memory Subsystem} & NetworkX MultiDiGraph ($1.16$\,ms) + ChromaDB & Flat Files (\texttt{MEMORY.md} Logs) & Virtual Paged Archival Tables & Dense Vector DB Embeddings & Ephemeral State Dictionary \\

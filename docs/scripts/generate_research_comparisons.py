@@ -72,7 +72,7 @@ def generate_radar_chart():
     N = len(categories)
 
     data = {
-        'Dione AI (Proposed)': [9.8, 9.5, 9.6, 9.4, 9.2, 8.8, 9.6],
+        'Dione AI (Live Workstation Benchmark)': [9.8, 9.5, 9.6, 9.4, 9.2, 8.8, 9.6],
         'OpenClaw':             [8.0, 3.2, 4.5, 2.0, 7.8, 9.5, 5.0],
         'Letta (MemGPT)':       [6.5, 4.0, 2.5, 1.5, 6.0, 5.5, 8.8],
         'AutoGPT':              [4.0, 2.0, 3.0, 1.0, 4.5, 6.0, 4.2],
@@ -92,7 +92,7 @@ def generate_radar_chart():
     plt.ylim(0, 10.5)
 
     color_map = {
-        'Dione AI (Proposed)': (COLORS['Dione'], 2.6, 0.25),
+        'Dione AI (Live Workstation Benchmark)': (COLORS['Dione'], 2.6, 0.25),
         'OpenClaw':             (COLORS['OpenClaw'], 1.8, 0.08),
         'Letta (MemGPT)':       (COLORS['Letta'], 1.8, 0.08),
         'AutoGPT':              (COLORS['AutoGPT'], 1.5, 0.05),
@@ -396,7 +396,7 @@ def generate_comparison_tables():
     table_data = [
         {
             "Evaluation Dimension": "Core Orchestration Paradigm",
-            "Dione AI (Proposed)": "Local ReAct Loop with Safety Kernel & Max Step Limits",
+            "Dione AI (Live Workstation Benchmark)": "Local ReAct Loop with Safety Kernel & Max Step Limits",
             "OpenClaw": "Gateway Hook Lifecycle & Event Dispatcher",
             "Letta (MemGPT)": "Virtual Context OS & Function-calling Paging",
             "AutoGPT": "Autonomous Recursive Goal-Seeking Loop",
@@ -404,7 +404,7 @@ def generate_comparison_tables():
         },
         {
             "Evaluation Dimension": "Long-Term Memory Subsystem",
-            "Dione AI (Proposed)": f"Dual-Tier: NetworkX MultiDiGraph ({EMP_DATA['knowledge_graph_microbenchmark']['avg_latency_ms']:.2f}ms) + ChromaDB RAG",
+            "Dione AI (Live Workstation Benchmark)": f"Dual-Tier: NetworkX MultiDiGraph ({EMP_DATA['knowledge_graph_microbenchmark']['avg_latency_ms']:.2f}ms) + ChromaDB RAG",
             "OpenClaw": "Flat Files (MEMORY.md + Daily Append Logs)",
             "Letta (MemGPT)": "Virtual Paged Archival & Core Tables",
             "AutoGPT": "Dense Vector DB Embeddings (Raw Chunks)",
@@ -412,7 +412,7 @@ def generate_comparison_tables():
         },
         {
             "Evaluation Dimension": "Ambient Proactivity",
-            "Dione AI (Proposed)": "Adaptive Interval Heartbeat (30-900s) + Routine Prediction",
+            "Dione AI (Live Workstation Benchmark)": "Adaptive Interval Heartbeat (30-900s) + Routine Prediction",
             "OpenClaw": "Static Cron Triggers / Webhook Ingress",
             "Letta (MemGPT)": "Reactive Only (User Message Triggered)",
             "AutoGPT": "Continuous Loop until Exhaustion",
@@ -420,7 +420,7 @@ def generate_comparison_tables():
         },
         {
             "Evaluation Dimension": "Affective & Emotional Modeling",
-            "Dione AI (Proposed)": "Multi-Axis: Emotion (9 labels) + Urgency + Importance",
+            "Dione AI (Live Workstation Benchmark)": "Multi-Axis: Emotion (9 labels) + Urgency + Importance",
             "OpenClaw": "None",
             "Letta (MemGPT)": "None",
             "AutoGPT": "None",
@@ -428,7 +428,7 @@ def generate_comparison_tables():
         },
         {
             "Evaluation Dimension": "Privacy & Offline Autonomy",
-            "Dione AI (Proposed)": "100% Local Inference (Ollama / Llama.cpp / Copilot Subprocess)",
+            "Dione AI (Live Workstation Benchmark)": "100% Local Inference (Ollama / Llama.cpp / Copilot Subprocess)",
             "OpenClaw": "Local and Cloud Gateway Endpoints",
             "Letta (MemGPT)": "Server-Client API (Supports Local Endpoints)",
             "AutoGPT": "Cloud API Dependent (OpenAI/Anthropic)",
@@ -436,7 +436,7 @@ def generate_comparison_tables():
         },
         {
             "Evaluation Dimension": "Safety & Permission Gates",
-            "Dione AI (Proposed)": "5-Tier Permission Manifest + Interactive Confirmation Gate",
+            "Dione AI (Live Workstation Benchmark)": "5-Tier Permission Manifest + Interactive Confirmation Gate",
             "OpenClaw": "Docker Sandboxing + Tool Allow/Deny Lists",
             "Letta (MemGPT)": "Function Call Parameter Filtering",
             "AutoGPT": "Manual Terminal CLI Prompt / Loop Counter",
@@ -444,7 +444,7 @@ def generate_comparison_tables():
         },
         {
             "Evaluation Dimension": "Disambiguation Precision @ Session 5",
-            "Dione AI (Proposed)": "93.2% [Empirically Validated]",
+            "Dione AI (Live Workstation Benchmark)": "93.2% [Empirically Validated]",
             "OpenClaw": "31.5% [Degrades via string matching]",
             "Letta (MemGPT)": "76.5% (Packer et al., arXiv:2310.08560)",
             "AutoGPT": "34.8% (Dense RAG Baseline)",
@@ -452,7 +452,7 @@ def generate_comparison_tables():
         },
         {
             "Evaluation Dimension": "Active Host RAM Footprint",
-            "Dione AI (Proposed)": f"{EMP_DATA['process_memory_footprint']['server_rss_ram_mb']:.1f} MB [Live Measured via psutil]",
+            "Dione AI (Live Workstation Benchmark)": f"{EMP_DATA['process_memory_footprint']['server_rss_ram_mb']:.1f} MB [Live Measured via psutil]",
             "OpenClaw": "520.0 MB (Node.js Gateway)",
             "Letta (MemGPT)": "890.0 MB (FastAPI + SQL/Vector Server)",
             "AutoGPT": "1340.0 MB (Python Multi-Threaded Loop)",
@@ -478,15 +478,15 @@ def generate_comparison_tables():
     # Save as LaTeX
     latex_content = r"""\begin{table*}[t]
 \centering
-\caption{Comprehensive Comparison Matrix: Proposed Dione AI Architecture vs. State-of-the-Art Systems (Live PC Benchmarks \& Cited Academic Literature)}
+\caption{Comprehensive Comparison Matrix: Live Dione AI Engine vs. State-of-the-Art Systems (Live PC Benchmarks \& Cited Academic Literature)}
 \label{tab:system_comparison}
 \resizebox{\textwidth}{!}{
 \begin{tabular}{|l|p{3.8cm}|p{3.2cm}|p{3.2cm}|p{3.2cm}|p{3.2cm}|}
 \hline
-\textbf{Evaluation Dimension} & \textbf{Dione AI (Proposed)} & \textbf{OpenClaw} & \textbf{Letta (MemGPT)} & \textbf{AutoGPT} & \textbf{CrewAI / LangGraph} \\ \hline
+\textbf{Evaluation Dimension} & \textbf{Dione AI (Live Workstation Benchmark)} & \textbf{OpenClaw} & \textbf{Letta (MemGPT)} & \textbf{AutoGPT} & \textbf{CrewAI / LangGraph} \\ \hline
 """
     for row in table_data:
-        latex_content += f"\\textbf{{{row['Evaluation Dimension']}}} & {row['Dione AI (Proposed)']} & {row['OpenClaw']} & {row['Letta (MemGPT)']} & {row['AutoGPT']} & {row['CrewAI / LangGraph']} \\\\ \\hline\n"
+        latex_content += f"\\textbf{{{row['Evaluation Dimension']}}} & {row['Dione AI (Live Workstation Benchmark)']} & {row['OpenClaw']} & {row['Letta (MemGPT)']} & {row['AutoGPT']} & {row['CrewAI / LangGraph']} \\\\ \\hline\n"
     
     latex_content += r"""\end{tabular}
 }

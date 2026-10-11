@@ -1,7 +1,10 @@
 import fitz, os, shutil
 
 def main():
-    pdf_in = os.path.expanduser('~/Downloads/DIONE_IEEE_PAPER_OVERLEAF_PACKAGE__3_.pdf')
+    if os.path.exists('docs/DIONE_IEEE_RESEARCH_PAPER_A4.pdf'):
+        pdf_in = 'docs/DIONE_IEEE_RESEARCH_PAPER_A4.pdf'
+    else:
+        pdf_in = os.path.expanduser('~/Downloads/DIONE_IEEE_PAPER_OVERLEAF_PACKAGE__3_.pdf')
     pdf_out = 'docs/DIONE_IEEE_PAPER_AI_AND_PLAGIARISM_AUDIT_HIGHLIGHTED.pdf'
 
     if not os.path.exists(pdf_in):

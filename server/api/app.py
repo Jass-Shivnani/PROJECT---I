@@ -113,10 +113,19 @@ async def lifespan(app: FastAPI):
     heartbeat.set_profile_manager(profile_manager)
     heartbeat.set_personality_engine(personality)
 
-    # 11. Dione Engine (Microsoft Agent Framework MAF 1.20.0)
-    logger.info("Assembling Dione Engine (Microsoft Agent Framework MAF 1.20.0)...")
-    from server.core.maf_engine import MAFEngine
-    engine = MAFEngine(model_name=settings.llm.model)
+    # 11. Dione Engine
+    logger.info("Assembling Dione Engine (Native ReAct Loop + Safety Kernel)...")
+    from server.core.engine import DioneEngine
+    engine = DioneEngine()
+    engine.set_llm(llm)
+    engine.set_plugins(plugins)
+    engine.set_knowledge_graph(knowledge)
+    engine.set_sentiment_engine(sentiment)
+    engine.set_memory_manager(memory)
+    engine.set_profile_manager(profile_manager)
+    engine.set_personality_engine(personality)
+    engine.set_heartbeat(heartbeat)
+    engine.set_ui_builder(ui_builder)
 
     # 12. Integrations (Gmail, Drive, etc.)
     logger.info("Initializing integrations...")
@@ -201,9 +210,8 @@ def create_app() -> FastAPI:
     )
 
     # Register routes
-    from server.api.routes import chat, knowledge, plugins, status, audio, integrations, channels, desktop, ag_ui
+    from server.api.routes import chat, knowledge, plugins, status, audio, integrations, channels, desktop
     app.include_router(chat.router, prefix="/api", tags=["Chat"])
-    app.include_router(ag_ui.router, prefix="/api/ag-ui", tags=["AG-UI"])
     app.include_router(desktop.router, prefix="/api/desktop", tags=["Desktop"])
     app.include_router(knowledge.router, prefix="/api/knowledge", tags=["Knowledge"])
     app.include_router(plugins.router, prefix="/api/plugins", tags=["Plugins"])
@@ -211,6 +219,12 @@ def create_app() -> FastAPI:
     app.include_router(channels.router, prefix="/api/channels", tags=["Channels"])
     app.include_router(status.router, prefix="/api/status", tags=["Status"])
     app.include_router(audio.router, prefix="/api/audio", tags=["Audio"])
+
+    try:
+        from server.api.routes import ag_ui
+        app.include_router(ag_ui.router, prefix="/api/ag-ui", tags=["AG-UI"])
+    except Exception as e:
+        logger.debug(f"Optional AG-UI route skipped: {e}")
 
     # Serve compiled React client SPA if available
     client_dist = Path(__file__).resolve().parent.parent.parent / "client" / "dist"

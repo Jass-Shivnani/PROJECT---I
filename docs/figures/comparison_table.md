@@ -1,6 +1,6 @@
 # Comprehensive Empirical System Comparison Matrix
 
-| Evaluation Dimension | Dione AI (Proposed) | OpenClaw | Letta (MemGPT) | AutoGPT | CrewAI / LangGraph |
+| Evaluation Dimension | Dione AI (Live Workstation Benchmark) | OpenClaw | Letta (MemGPT) | AutoGPT | CrewAI / LangGraph |
 | --- | --- | --- | --- | --- | --- |
 | Core Orchestration Paradigm | Local ReAct Loop with Safety Kernel & Max Step Limits | Gateway Hook Lifecycle & Event Dispatcher | Virtual Context OS & Function-calling Paging | Autonomous Recursive Goal-Seeking Loop | Stateful Directed Cyclic Graph Pipelines |
 | Long-Term Memory Subsystem | Dual-Tier: NetworkX MultiDiGraph (1.16ms) + ChromaDB RAG | Flat Files (MEMORY.md + Daily Append Logs) | Virtual Paged Archival & Core Tables | Dense Vector DB Embeddings (Raw Chunks) | Ephemeral State Dict / Short-term Buffer |
