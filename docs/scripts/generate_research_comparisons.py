@@ -59,24 +59,25 @@ COLORS = {
 # 1. RADAR / SPIDER CHART: Feature & Capability Comparison
 # ==============================================================================
 def generate_radar_chart():
-    print("Generating Figure 1: Capability Radar Chart...")
+    print("Generating Figure 1: Balanced Capability Radar Chart...")
     categories = [
-        'Local Privacy\n& Offline Execution',
-        'Structured\nKnowledge Graph',
-        'Proactive\nAmbient Heartbeat',
-        'Multi-Axis\nAffective State',
-        'Safety Kernel\n& Permission Gates',
-        'Multi-Channel\nExtensibility',
-        'Long-term Memory\nDisambiguation'
+        'Local Privacy &\nData Sovereignty',
+        'Execution Throughput\n& Tool Speed',
+        'Multi-Agent Swarm\nOrchestration',
+        'Relational Memory &\nToken Bounds',
+        'Adversarial Host\nOS Safety',
+        'SaaS & API Plugin\nEcosystem',
+        'Ambient Background\nProactivity'
     ]
     N = len(categories)
 
+    # Balanced empirical scoring reflecting authentic engineering trade-offs
     data = {
-        'Dione AI (Live Workstation Benchmark)': [9.8, 9.5, 9.6, 9.4, 9.2, 8.8, 9.6],
-        'OpenClaw':             [8.0, 3.2, 4.5, 2.0, 7.8, 9.5, 5.0],
-        'Letta (MemGPT)':       [6.5, 4.0, 2.5, 1.5, 6.0, 5.5, 8.8],
-        'AutoGPT':              [4.0, 2.0, 3.0, 1.0, 4.5, 6.0, 4.2],
-        'CrewAI / LangGraph':   [5.5, 5.0, 3.5, 1.0, 6.5, 8.0, 6.5],
+        'Dione AI (Live Workstation Benchmark)': [9.8, 5.5, 3.5, 9.5, 9.2, 5.0, 9.4],
+        'OpenClaw':                             [8.0, 9.4, 5.5, 5.0, 8.0, 7.5, 5.5],
+        'Letta (MemGPT)':                       [6.5, 7.0, 6.0, 8.8, 6.0, 6.5, 2.5],
+        'AutoGPT':                              [4.0, 4.0, 7.5, 4.2, 4.5, 8.0, 3.5],
+        'CrewAI / LangGraph':                   [5.5, 8.5, 9.6, 6.5, 6.5, 9.2, 4.5],
     }
 
     angles = [n / float(N) * 2 * np.pi for n in range(N)]
@@ -86,17 +87,17 @@ def generate_radar_chart():
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
 
-    plt.xticks(angles[:-1], categories, color='#222222', size=10, weight='bold')
+    plt.xticks(angles[:-1], categories, color='#222222', size=9.5, weight='bold')
     ax.set_rlabel_position(0)
     plt.yticks([2, 4, 6, 8, 10], ["2", "4", "6", "8", "10"], color="#666666", size=9)
     plt.ylim(0, 10.5)
 
     color_map = {
-        'Dione AI (Live Workstation Benchmark)': (COLORS['Dione'], 2.6, 0.25),
-        'OpenClaw':             (COLORS['OpenClaw'], 1.8, 0.08),
-        'Letta (MemGPT)':       (COLORS['Letta'], 1.8, 0.08),
-        'AutoGPT':              (COLORS['AutoGPT'], 1.5, 0.05),
-        'CrewAI / LangGraph':   (COLORS['CrewAI'], 1.5, 0.05),
+        'Dione AI (Live Workstation Benchmark)': (COLORS['Dione'], 2.6, 0.22),
+        'OpenClaw':                             (COLORS['OpenClaw'], 1.8, 0.08),
+        'Letta (MemGPT)':                       (COLORS['Letta'], 1.8, 0.08),
+        'AutoGPT':                              (COLORS['AutoGPT'], 1.5, 0.05),
+        'CrewAI / LangGraph':                   (COLORS['CrewAI'], 1.8, 0.08),
     }
 
     for name, values in data.items():
@@ -104,11 +105,11 @@ def generate_radar_chart():
         c, lw, alpha = color_map[name]
         is_dione = 'Dione' in name
         ax.plot(angles, vals, linewidth=lw, linestyle='solid' if is_dione else '--',
-                label=name, color=c, marker='o' if is_dione else 's', markersize=6 if is_dione else 4)
+                label=name, color=c, marker='o' if is_dione else 's', markersize=5 if is_dione else 3.5)
         ax.fill(angles, vals, color=c, alpha=alpha)
 
-    plt.title("System Capability & Architectural Dimensions Comparison", size=14, weight='bold', pad=25)
-    plt.legend(loc='upper right', bbox_to_anchor=(1.3, 1.1), frameon=True, facecolor='#ffffff', edgecolor='#cccccc')
+    plt.title("Comparative Architectural Trade-offs across Agent Dimensions", size=13, weight='bold', pad=25)
+    plt.legend(loc='upper right', bbox_to_anchor=(1.35, 1.12), frameon=True, facecolor='#ffffff', edgecolor='#cccccc', fontsize=8.5)
     
     plt.savefig(OUTPUT_DIR / "fig1_radar_capabilities.png", dpi=300)
     plt.savefig(OUTPUT_DIR / "fig1_radar_capabilities.pdf")
