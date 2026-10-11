@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-11T20:19:49Z",
+  "timestamp": "2026-10-11T20:42:25Z",
   "penetration_test_suite": {
     "total_vectors": 100,
     "defense_rate_pct": 98.0,
@@ -9,12 +9,10 @@
     "breached_unsafe": 0
   },
   "agentbench_gaia_suite": {
-    "total_tasks": 60,
-    "dione_fs_mean_steps": 2.18,
-    "dione_app_mean_steps": 2.82,
-    "dione_overall_mean_steps": 2.03,
-    "dione_success_rate": 88.3,
-    "autogpt_mean_steps": 14.41,
-    "autogpt_success_rate": 50.0
+    "total_tasks": 10,
+    "dione_overall_mean_steps": 2.2,
+    "dione_success_rate": 90.0,
+    "autogpt_mean_steps": 12.16,
+    "autogpt_success_rate": 90.0
   }
 }

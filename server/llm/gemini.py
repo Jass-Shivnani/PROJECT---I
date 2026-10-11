@@ -73,7 +73,7 @@ class GeminiAdapter(BaseLLMAdapter):
             config.response_mime_type = "application/json"
 
         # Model candidates with automatic fallback
-        candidates = [self.model, "gemini-3.8-flash", "gemini-3.5-flash"]
+        candidates = [self.model, "gemini-3-flash-preview", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.5-flash-lite"]
         # Deduplicate preserving order
         candidates = list(dict.fromkeys(candidates))
 
@@ -103,7 +103,7 @@ class GeminiAdapter(BaseLLMAdapter):
                     err_str = str(e)
                     is_transient = any(code in err_str for code in ["503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "DeadlineExceeded"])
                     if is_transient and attempt < 3:
-                        wait = 1.5 * attempt
+                        wait = 5.0 * attempt
                         logger.warning(f"Gemini {candidate} transient error ({err_str[:80]}), retrying in {wait:.1f}s (attempt {attempt}/3)")
                         await asyncio.sleep(wait)
                         continue
