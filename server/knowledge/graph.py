@@ -40,7 +40,15 @@ class KnowledgeGraph:
     def __init__(self, storage_path: str = "./data/knowledge/graph.json"):
         self.storage_path = Path(storage_path)
         self.graph = nx.MultiDiGraph()
+        self._social_engine = None
         self._load()
+
+    @property
+    def social_engine(self):
+        if self._social_engine is None:
+            from server.knowledge.social_intelligence import SocialIntelligenceEngine
+            self._social_engine = SocialIntelligenceEngine(knowledge_graph=self)
+        return self._social_engine
 
     def _load(self):
         """Load graph from disk."""

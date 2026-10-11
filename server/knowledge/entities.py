@@ -23,6 +23,7 @@ class EntityType(Enum):
     APPLICATION = "application"  # Software/app the user uses
     MESSAGE = "message"
     TASK = "task"
+    COMMITMENT = "commitment"
 
 
 @dataclass
@@ -50,9 +51,14 @@ class Entity:
 
     @classmethod
     def from_dict(cls, data: dict) -> "Entity":
+        try:
+            ent_type = EntityType(data["type"].lower())
+        except (ValueError, KeyError, AttributeError):
+            ent_type = EntityType.TASK
+
         return cls(
             id=data["id"],
-            type=EntityType(data["type"]),
+            type=ent_type,
             name=data["name"],
             created_at=data.get("created_at", ""),
             updated_at=data.get("updated_at", ""),

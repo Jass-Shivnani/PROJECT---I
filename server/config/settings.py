@@ -78,13 +78,23 @@ class SentimentSettings(BaseSettings):
 class SecuritySettings(BaseSettings):
     """Security configuration."""
     sandbox_enabled: bool = True
-    require_confirmation_for: List[str] = ["delete", "send", "execute"]
+    require_confirmation_for: List[str] = ["delete", "send", "execute", "desktop_automation", "database"]
     max_retries: int = 3
     blocked_patterns: List[str] = [
         "rm -rf",
+        "rmdir /s /q",
         "DROP TABLE",
+        "DROP DATABASE",
         "FORMAT",
         "del /f /s /q",
+        "powershell -enc",
+        "reg delete",
+        "net user",
+        "System32.*SAM",
+        "id_rsa",
+        r"\.ssh",
+        r"<\|im_start\|>",
+        r"\[INST\]",
     ]
 
     class Config:

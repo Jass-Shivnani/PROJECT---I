@@ -6,9 +6,11 @@ over HTTP and WebSocket for the mobile companion.
 """
 
 from contextlib import asynccontextmanager
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
+from pathlib import Path
 
 from server.config.settings import get_settings
 
@@ -111,23 +113,33 @@ async def lifespan(app: FastAPI):
     heartbeat.set_profile_manager(profile_manager)
     heartbeat.set_personality_engine(personality)
 
-    # 11. Dione Engine (the brain)
-    logger.info("Assembling Dione Engine...")
-    engine = DioneEngine()
-    engine.set_llm(llm)
-    engine.set_plugins(plugins)
-    engine.set_knowledge_graph(knowledge)
-    engine.set_sentiment_engine(sentiment)
-    engine.set_memory_manager(memory)
-    engine.set_profile_manager(profile_manager)
-    engine.set_personality_engine(personality)
-    engine.set_heartbeat(heartbeat)
-    engine.set_ui_builder(ui_builder)
+    # 11. Dione Engine (Microsoft Agent Framework MAF 1.20.0)
+    logger.info("Assembling Dione Engine (Microsoft Agent Framework MAF 1.20.0)...")
+    from server.core.maf_engine import MAFEngine
+    engine = MAFEngine(model_name=settings.llm.model)
 
     # 12. Integrations (Gmail, Drive, etc.)
     logger.info("Initializing integrations...")
     integrations = create_default_registry(data_dir="data")
-    engine.set_integrations(integrations)
+
+    # 13. Telegram Bot Background Service (if token present)
+    telegram_token = os.getenv("DIONE_TELEGRAM_BOT_TOKEN", "").strip()
+    telegram_service = None
+    if telegram_token:
+        try:
+            logger.info("Initializing Telegram Bot Service...")
+            from server.telegram import TelegramBotService
+            telegram_service = TelegramBotService(
+                bot_token=telegram_token,
+                engine=engine,
+                allowed_chat_id=os.getenv("DIONE_TELEGRAM_CHAT_ID"),
+            )
+            started = await telegram_service.start()
+            if started:
+                logger.info("✨ Telegram Bot Service active: @DioneAiBot")
+            app.state.telegram_service = telegram_service
+        except Exception as e:
+            logger.error(f"Failed to start Telegram service: {e}")
 
     # Start the heartbeat (background task)
     await heartbeat.start()
@@ -156,6 +168,8 @@ async def lifespan(app: FastAPI):
 
     # Shutdown
     logger.info("Dione AI shutting down...")
+    if telegram_service:
+        await telegram_service.stop()
     await heartbeat.stop()
     personality.save()
     profile_manager.save()
@@ -187,8 +201,10 @@ def create_app() -> FastAPI:
     )
 
     # Register routes
-    from server.api.routes import chat, knowledge, plugins, status, audio, integrations, channels
+    from server.api.routes import chat, knowledge, plugins, status, audio, integrations, channels, desktop, ag_ui
     app.include_router(chat.router, prefix="/api", tags=["Chat"])
+    app.include_router(ag_ui.router, prefix="/api/ag-ui", tags=["AG-UI"])
+    app.include_router(desktop.router, prefix="/api/desktop", tags=["Desktop"])
     app.include_router(knowledge.router, prefix="/api/knowledge", tags=["Knowledge"])
     app.include_router(plugins.router, prefix="/api/plugins", tags=["Plugins"])
     app.include_router(integrations.router, prefix="/api/integrations", tags=["Integrations"])
@@ -196,13 +212,33 @@ def create_app() -> FastAPI:
     app.include_router(status.router, prefix="/api/status", tags=["Status"])
     app.include_router(audio.router, prefix="/api/audio", tags=["Audio"])
 
-    @app.get("/", tags=["Root"])
-    async def root():
-        return {
-            "name": "Dione AI",
-            "version": "0.2.0",
-            "status": "alive",
-            "description": "Local Large Action Model Orchestration Engine",
-        }
+    # Serve compiled React client SPA if available
+    client_dist = Path(__file__).resolve().parent.parent.parent / "client" / "dist"
+    if client_dist.exists():
+        from fastapi.staticfiles import StaticFiles
+        from fastapi.responses import FileResponse
+        from starlette.exceptions import HTTPException as StarletteHTTPException
+
+        assets_dir = client_dist / "assets"
+        if assets_dir.exists():
+            app.mount("/assets", StaticFiles(directory=str(assets_dir)), name="assets")
+
+        @app.get("/{full_path:path}", include_in_schema=False)
+        async def serve_spa(full_path: str):
+            if full_path.startswith("api"):
+                raise StarletteHTTPException(status_code=404, detail="Not Found")
+            target = client_dist / full_path
+            if target.exists() and target.is_file():
+                return FileResponse(target)
+            return FileResponse(client_dist / "index.html")
+    else:
+        @app.get("/", tags=["Root"])
+        async def root():
+            return {
+                "name": "Dione AI",
+                "version": "0.2.0",
+                "status": "alive",
+                "description": "Local Large Action Model Orchestration Engine",
+            }
 
     return app

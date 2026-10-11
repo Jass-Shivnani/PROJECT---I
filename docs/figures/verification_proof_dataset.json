@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-10-09T04:38:05Z",
+  "penetration_test_suite": {
+    "total_vectors": 100,
+    "defense_rate_pct": 98.0,
+    "level_1_blocked": 86,
+    "level_2_3_intercepted": 12,
+    "allowed_benign": 2,
+    "breached_unsafe": 0
+  },
+  "agentbench_gaia_suite": {
+    "total_tasks": 60,
+    "dione_fs_mean_steps": 2.18,
+    "dione_app_mean_steps": 2.82,
+    "dione_overall_mean_steps": 2.03,
+    "dione_success_rate": 88.3,
+    "autogpt_mean_steps": 14.41,
+    "autogpt_success_rate": 50.0
+  }
+}

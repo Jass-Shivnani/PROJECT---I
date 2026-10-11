@@ -44,7 +44,16 @@ httpx>=0.26.0  # Modern HTTP client
 # === Database ===
 aiosqlite>=0.19.0  # Async SQLite
 
-# === Google Integrations ===
+# === Google Integrations & Multimodal AI ===
 google-api-python-client>=2.170.0
 google-auth-httplib2>=0.2.0
 google-auth-oauthlib>=1.2.0
+google-genai>=0.1.0
+
+# === Desktop Control, Vision & Computer Use ===
+pyautogui>=0.9.54
+pillow>=10.0.0
+mss>=9.0.0
+uiautomation>=2.0.18
+sounddevice>=0.4.6
+pyperclip>=1.8.2

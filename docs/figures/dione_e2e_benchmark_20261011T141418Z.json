@@ -1,0 +1,337 @@
+{
+  "title": "Dione End-to-End Task Benchmark",
+  "run_started_utc": "20261011T141418Z",
+  "scope": "Fixed project-specific task set through Dione REST API using configured Gemini backend; not official GAIA/AgentBench results.",
+  "model_configured": "gemini-3.5-flash-lite",
+  "repetition_count": 3,
+  "planned_task_attempts": 23,
+  "completed_task_attempts": 12,
+  "provider_http_request_cap_this_run": 50,
+  "provider_requests_used_before_run": 30,
+  "provider_http_requests_used": 28,
+  "provider_http_requests_used_cumulative": 58,
+  "prior_unscored_provider_requests": 30,
+  "provider_last_blocked_status": 429,
+  "provider_request_paths": [
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent"
+  ],
+  "server_error": "Provider authentication, quota, or rate-limit failure; stopped to avoid burning more quota.",
+  "task_summary": {
+    "T01_ARITHMETIC": {
+      "attempts": 1,
+      "successes": 1
+    },
+    "T02_REVERSAL": {
+      "attempts": 1,
+      "successes": 1
+    },
+    "T03_COUNTING": {
+      "attempts": 1,
+      "successes": 1
+    },
+    "T04_DIRECTORY_COUNT": {
+      "attempts": 1,
+      "successes": 1
+    },
+    "T05_READ_FILE": {
+      "attempts": 1,
+      "successes": 1
+    },
+    "T06_SQL_LOOKUP": {
+      "attempts": 1,
+      "successes": 1
+    },
+    "T07_EXTENSION_COUNT": {
+      "attempts": 1,
+      "successes": 1
+    },
+    "T08_FILE_CALCULATION": {
+      "attempts": 2,
+      "successes": 2
+    },
+    "T09_KNOWLEDGE_LOOKUP": {
+      "attempts": 2,
+      "successes": 0
+    },
+    "T10_COMPOSED_TOOLS": {
+      "attempts": 1,
+      "successes": 1
+    }
+  },
+  "environment": {
+    "os": "Windows-11-10.0.26340-SP0",
+    "python": "3.12.10",
+    "cpu": "Intel64 Family 6 Model 141 Stepping 1, GenuineIntel",
+    "logical_cpus": 8,
+    "ram_total_bytes": 16938459136,
+    "git_revision": "5d20f65e5be4b7e266d7f1d26298eed14edb4643",
+    "working_tree_dirty": true
+  },
+  "overall": {
+    "successes": 10,
+    "attempts": 12,
+    "success_rate_pct": 83.33
+  },
+  "limitations": [
+    "Small custom task set authored for this project; not a standardized benchmark suite.",
+    "Each task was attempted up to 3 times; the cumulative 30-request user-authorized cap can terminate the run early.",
+    "Host shell execution and desktop monitoring were disabled for safety in this run.",
+    "Tool correctness is checked using returned tool names and fixed expected-answer regular expressions.",
+    "Latency is end-to-end local HTTP response time and includes model/tool cycles.",
+    "The configured Gemini backend is cloud-hosted; this run does not evaluate local inference or privacy."
+  ],
+  "trials": [
+    {
+      "task_id": "T08_FILE_CALCULATION",
+      "repeat": 1,
+      "prompt": "Read C:\\Users\\Jass\\AppData\\Local\\Temp\\dione_e2e_bench_nviskhci\\benchmark_data\\files\\beta.csv with the filesystem tool and add all values in its value column. Reply with the sum only.",
+      "http_status": 200,
+      "response": "50",
+      "answer_correct": true,
+      "expected_tools": [
+        "FilesystemPlugin.read_file"
+      ],
+      "tools_used": [
+        "FilesystemPlugin.read_file"
+      ],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 3744.64,
+      "provider_requests_before": 0,
+      "provider_requests_after": 2
+    },
+    {
+      "task_id": "T09_KNOWLEDGE_LOOKUP",
+      "repeat": 1,
+      "prompt": "Search Dione's knowledge graph for the Dione project and report its status. Reply with the status only.",
+      "http_status": 200,
+      "response": "Archived",
+      "answer_correct": false,
+      "expected_tools": [
+        "KnowledgeGraph.query"
+      ],
+      "tools_used": [
+        "KnowledgeGraph.query",
+        "KnowledgeGraph.query",
+        "FilesystemPlugin.list_directory",
+        "SystemPlugin.run_command",
+        "KnowledgeGraph.query",
+        "WebResearchPlugin.web_search"
+      ],
+      "missing_expected_tools": [],
+      "success": false,
+      "latency_ms": 16079.31,
+      "provider_requests_before": 2,
+      "provider_requests_after": 9
+    },
+    {
+      "task_id": "T10_COMPOSED_TOOLS",
+      "repeat": 1,
+      "prompt": "Use the filesystem tool to count all entries including hidden in C:\\Users\\Jass\\AppData\\Local\\Temp\\dione_e2e_bench_nviskhci\\benchmark_data\\files, and use a read-only SQL query on C:\\Users\\Jass\\AppData\\Local\\Temp\\dione_e2e_bench_nviskhci\\benchmark_data\\benchmark.sqlite to count rows in the people table. Reply exactly as files=<count>; people=<count>.",
+      "http_status": 200,
+      "response": "files=4; people=2",
+      "answer_correct": true,
+      "expected_tools": [
+        "FilesystemPlugin.list_directory",
+        "SystemPlugin.run_command"
+      ],
+      "tools_used": [
+        "FilesystemPlugin.list_directory",
+        "SystemPlugin.run_command"
+      ],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 4129.31,
+      "provider_requests_before": 9,
+      "provider_requests_after": 11
+    },
+    {
+      "task_id": "T01_ARITHMETIC",
+      "repeat": 2,
+      "prompt": "Calculate 48 * 125 + 350. Reply with the number only.",
+      "http_status": 200,
+      "response": "6350",
+      "answer_correct": true,
+      "expected_tools": [],
+      "tools_used": [],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 1611.5,
+      "provider_requests_before": 11,
+      "provider_requests_after": 12
+    },
+    {
+      "task_id": "T02_REVERSAL",
+      "repeat": 2,
+      "prompt": "Reverse the spelling of Dione. Reply with the reversed word only.",
+      "http_status": 200,
+      "response": "enoiD",
+      "answer_correct": true,
+      "expected_tools": [],
+      "tools_used": [],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 1542.64,
+      "provider_requests_before": 12,
+      "provider_requests_after": 13
+    },
+    {
+      "task_id": "T03_COUNTING",
+      "repeat": 2,
+      "prompt": "A box contains 3 red, 4 blue, and 2 green balls. All red balls are removed. How many balls remain? Reply with the integer only.",
+      "http_status": 200,
+      "response": "6",
+      "answer_correct": true,
+      "expected_tools": [],
+      "tools_used": [],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 1463.42,
+      "provider_requests_before": 13,
+      "provider_requests_after": 14
+    },
+    {
+      "task_id": "T04_DIRECTORY_COUNT",
+      "repeat": 2,
+      "prompt": "Use the filesystem tool to inspect C:\\Users\\Jass\\AppData\\Local\\Temp\\dione_e2e_bench_nviskhci\\benchmark_data\\files. How many entries are there, including hidden entries? Reply with the count.",
+      "http_status": 200,
+      "response": "4",
+      "answer_correct": true,
+      "expected_tools": [
+        "FilesystemPlugin.list_directory"
+      ],
+      "tools_used": [
+        "FilesystemPlugin.list_directory"
+      ],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 4170.03,
+      "provider_requests_before": 14,
+      "provider_requests_after": 16
+    },
+    {
+      "task_id": "T05_READ_FILE",
+      "repeat": 2,
+      "prompt": "Use the file-reading tool to read C:\\Users\\Jass\\AppData\\Local\\Temp\\dione_e2e_bench_nviskhci\\benchmark_data\\files\\alpha.txt. What is the project codename? Reply with the code only.",
+      "http_status": 200,
+      "response": "ORCHID-73",
+      "answer_correct": true,
+      "expected_tools": [
+        "FilesystemPlugin.read_file"
+      ],
+      "tools_used": [
+        "FilesystemPlugin.read_file"
+      ],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 3958.11,
+      "provider_requests_before": 16,
+      "provider_requests_after": 18
+    },
+    {
+      "task_id": "T06_SQL_LOOKUP",
+      "repeat": 2,
+      "prompt": "Use a read-only SQL query on C:\\Users\\Jass\\AppData\\Local\\Temp\\dione_e2e_bench_nviskhci\\benchmark_data\\benchmark.sqlite. What role is recorded for Ada? Reply with the role only.",
+      "http_status": 200,
+      "response": "engineer",
+      "answer_correct": true,
+      "expected_tools": [
+        "SystemPlugin.run_command"
+      ],
+      "tools_used": [
+        "SystemPlugin.run_command",
+        "SystemPlugin.run_command",
+        "SystemPlugin.run_command"
+      ],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 8944.06,
+      "provider_requests_before": 18,
+      "provider_requests_after": 22
+    },
+    {
+      "task_id": "T07_EXTENSION_COUNT",
+      "repeat": 2,
+      "prompt": "Use the filesystem tool to inspect C:\\Users\\Jass\\AppData\\Local\\Temp\\dione_e2e_bench_nviskhci\\benchmark_data\\files. How many non-hidden files have the .txt extension? Reply with the count.",
+      "http_status": 200,
+      "response": "2",
+      "answer_correct": true,
+      "expected_tools": [
+        "FilesystemPlugin.list_directory"
+      ],
+      "tools_used": [
+        "FilesystemPlugin.list_directory"
+      ],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 3729.77,
+      "provider_requests_before": 22,
+      "provider_requests_after": 24
+    },
+    {
+      "task_id": "T08_FILE_CALCULATION",
+      "repeat": 2,
+      "prompt": "Read C:\\Users\\Jass\\AppData\\Local\\Temp\\dione_e2e_bench_nviskhci\\benchmark_data\\files\\beta.csv with the filesystem tool and add all values in its value column. Reply with the sum only.",
+      "http_status": 200,
+      "response": "50",
+      "answer_correct": true,
+      "expected_tools": [
+        "FilesystemPlugin.read_file"
+      ],
+      "tools_used": [
+        "FilesystemPlugin.read_file"
+      ],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 3885.83,
+      "provider_requests_before": 24,
+      "provider_requests_after": 26
+    },
+    {
+      "task_id": "T09_KNOWLEDGE_LOOKUP",
+      "repeat": 2,
+      "prompt": "Search Dione's knowledge graph for the Dione project and report its status. Reply with the status only.",
+      "http_status": 200,
+      "response": "Error executing agent request: ('Gemini chat request failed: Provider stopped after HTTP 429; no retry sent', RuntimeError('Provider stopped after HTTP 429; no retry sent'))",
+      "answer_correct": false,
+      "expected_tools": [
+        "KnowledgeGraph.query"
+      ],
+      "tools_used": [],
+      "missing_expected_tools": [
+        "KnowledgeGraph.query"
+      ],
+      "success": false,
+      "latency_ms": 38577.84,
+      "provider_requests_before": 26,
+      "provider_requests_after": 28
+    }
+  ]
+}

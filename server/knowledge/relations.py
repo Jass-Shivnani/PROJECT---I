@@ -45,9 +45,11 @@ class RelationType(Enum):
     DEPENDS_ON = "depends_on"          # Task -> Task
     BLOCKED_BY = "blocked_by"          # Task -> Task
     
-    # Communication
+    # Communication & Commitments
     MENTIONED_IN = "mentioned_in"      # Entity -> Message/Document
     DISCUSSED = "discussed"            # Topic mentioned in conversation
+    PROMISED_TO = "promised_to"        # Commitment -> Person
+    OWED_BY = "owed_by"                # Commitment -> Person
 
 
 @dataclass
@@ -78,11 +80,16 @@ class Relation:
 
     @classmethod
     def from_dict(cls, data: dict) -> "Relation":
+        try:
+            rel_type = RelationType(data["relation_type"].lower())
+        except (ValueError, KeyError, AttributeError):
+            rel_type = RelationType.RELATED_TO
+
         return cls(
             id=data["id"],
             source_id=data["source_id"],
             target_id=data["target_id"],
-            relation_type=RelationType(data["relation_type"]),
+            relation_type=rel_type,
             weight=data.get("weight", 1.0),
             created_at=data.get("created_at", ""),
             metadata=data.get("metadata", {}),

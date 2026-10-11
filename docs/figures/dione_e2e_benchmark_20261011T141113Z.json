@@ -1,0 +1,234 @@
+{
+  "title": "Dione End-to-End Task Benchmark",
+  "run_started_utc": "20261011T141113Z",
+  "scope": "Fixed project-specific task set through Dione REST API using configured Gemini backend; not official GAIA/AgentBench results.",
+  "model_configured": "gemini-3.5-flash-lite",
+  "repetition_count": 1,
+  "planned_task_attempts": 10,
+  "completed_task_attempts": 7,
+  "provider_http_request_cap_this_run": 12,
+  "provider_requests_used_before_run": 18,
+  "provider_http_requests_used": 12,
+  "provider_http_requests_used_cumulative": 30,
+  "provider_last_blocked_status": null,
+  "provider_request_paths": [
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+    "generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent"
+  ],
+  "server_error": "The remaining hard cap for this run was reached.",
+  "task_summary": {
+    "T01_ARITHMETIC": {
+      "attempts": 1,
+      "successes": 1
+    },
+    "T02_REVERSAL": {
+      "attempts": 1,
+      "successes": 1
+    },
+    "T03_COUNTING": {
+      "attempts": 1,
+      "successes": 1
+    },
+    "T04_DIRECTORY_COUNT": {
+      "attempts": 1,
+      "successes": 1
+    },
+    "T05_READ_FILE": {
+      "attempts": 1,
+      "successes": 1
+    },
+    "T06_SQL_LOOKUP": {
+      "attempts": 1,
+      "successes": 1
+    },
+    "T07_EXTENSION_COUNT": {
+      "attempts": 1,
+      "successes": 1
+    },
+    "T08_FILE_CALCULATION": {
+      "attempts": 0,
+      "successes": 0
+    },
+    "T09_KNOWLEDGE_LOOKUP": {
+      "attempts": 0,
+      "successes": 0
+    },
+    "T10_COMPOSED_TOOLS": {
+      "attempts": 0,
+      "successes": 0
+    }
+  },
+  "overall": {
+    "successes": 7,
+    "attempts": 7,
+    "success_rate_pct": 100.0
+  },
+  "limitations": [
+    "Small custom task set authored for this project; not a standardized benchmark suite.",
+    "Each task was attempted up to 1 times; the cumulative 30-request user-authorized cap can terminate the run early.",
+    "Host shell execution and desktop monitoring were disabled for safety in this run.",
+    "Tool correctness is checked using returned tool names and fixed expected-answer regular expressions.",
+    "Latency is end-to-end local HTTP response time and includes model/tool cycles.",
+    "The configured Gemini backend is cloud-hosted; this run does not evaluate local inference or privacy."
+  ],
+  "trials": [
+    {
+      "task_id": "T01_ARITHMETIC",
+      "repeat": 1,
+      "prompt": "Calculate 48 * 125 + 350. Reply with the number only.",
+      "http_status": 200,
+      "response": "6350",
+      "answer_correct": true,
+      "expected_tools": [],
+      "tools_used": [],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 1407.45,
+      "provider_requests_before": 0,
+      "provider_requests_after": 1
+    },
+    {
+      "task_id": "T02_REVERSAL",
+      "repeat": 1,
+      "prompt": "Reverse the spelling of Dione. Reply with the reversed word only.",
+      "http_status": 200,
+      "response": "enoiD",
+      "answer_correct": true,
+      "expected_tools": [],
+      "tools_used": [],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 1161.25,
+      "provider_requests_before": 1,
+      "provider_requests_after": 2
+    },
+    {
+      "task_id": "T03_COUNTING",
+      "repeat": 1,
+      "prompt": "A box contains 3 red, 4 blue, and 2 green balls. All red balls are removed. How many balls remain? Reply with the integer only.",
+      "http_status": 200,
+      "response": "6",
+      "answer_correct": true,
+      "expected_tools": [],
+      "tools_used": [],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 676.5,
+      "provider_requests_before": 2,
+      "provider_requests_after": 3
+    },
+    {
+      "task_id": "T04_DIRECTORY_COUNT",
+      "repeat": 1,
+      "prompt": "Use the filesystem tool to inspect C:\\Users\\Jass\\AppData\\Local\\Temp\\dione_e2e_bench_7bmobsmd\\benchmark_data\\files. How many entries are there, including hidden entries? Reply with the count.",
+      "http_status": 200,
+      "response": "4",
+      "answer_correct": true,
+      "expected_tools": [
+        "FilesystemPlugin.list_directory"
+      ],
+      "tools_used": [
+        "FilesystemPlugin.list_directory"
+      ],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 1856.37,
+      "provider_requests_before": 3,
+      "provider_requests_after": 5
+    },
+    {
+      "task_id": "T05_READ_FILE",
+      "repeat": 1,
+      "prompt": "Use the file-reading tool to read C:\\Users\\Jass\\AppData\\Local\\Temp\\dione_e2e_bench_7bmobsmd\\benchmark_data\\files\\alpha.txt. What is the project codename? Reply with the code only.",
+      "http_status": 200,
+      "response": "ORCHID-73",
+      "answer_correct": true,
+      "expected_tools": [
+        "FilesystemPlugin.read_file"
+      ],
+      "tools_used": [
+        "FilesystemPlugin.read_file"
+      ],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 1751.58,
+      "provider_requests_before": 5,
+      "provider_requests_after": 7
+    },
+    {
+      "task_id": "T06_SQL_LOOKUP",
+      "repeat": 1,
+      "prompt": "Use a read-only SQL query on C:\\Users\\Jass\\AppData\\Local\\Temp\\dione_e2e_bench_7bmobsmd\\benchmark_data\\benchmark.sqlite. What role is recorded for Ada? Reply with the role only.",
+      "http_status": 200,
+      "response": "engineer",
+      "answer_correct": true,
+      "expected_tools": [
+        "SystemPlugin.run_command"
+      ],
+      "tools_used": [
+        "SystemPlugin.run_command",
+        "SystemPlugin.run_command"
+      ],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 3634.17,
+      "provider_requests_before": 7,
+      "provider_requests_after": 10
+    },
+    {
+      "task_id": "T07_EXTENSION_COUNT",
+      "repeat": 1,
+      "prompt": "Use the filesystem tool to inspect C:\\Users\\Jass\\AppData\\Local\\Temp\\dione_e2e_bench_7bmobsmd\\benchmark_data\\files. How many non-hidden files have the .txt extension? Reply with the count.",
+      "http_status": 200,
+      "response": "2",
+      "answer_correct": true,
+      "expected_tools": [
+        "FilesystemPlugin.list_directory"
+      ],
+      "tools_used": [
+        "FilesystemPlugin.list_directory"
+      ],
+      "missing_expected_tools": [],
+      "success": true,
+      "latency_ms": 1925.2,
+      "provider_requests_before": 10,
+      "provider_requests_after": 12
+    }
+  ],
+  "environment": {
+    "os": "Windows-11-10.0.26340-SP0",
+    "python": "3.12.10",
+    "cpu": "Intel64 Family 6 Model 141 Stepping 1, GenuineIntel",
+    "logical_cpus": 8,
+    "ram_total_bytes": 16938459136,
+    "git_revision": "5d20f65e5be4b7e266d7f1d26298eed14edb4643",
+    "working_tree_dirty": true
+  },
+  "evaluation_ledger": [
+    {
+      "phase": "preflight_attempt",
+      "provider_requests": 18,
+      "task_prompts_started": 9,
+      "scored_attempts": 0,
+      "disposition": "excluded: outputs were not checkpointed before interruption during Gemini rate-limit backoff; original run had shell tool exposed and was discarded"
+    },
+    {
+      "phase": "capped_safe_run",
+      "provider_requests": 12,
+      "task_attempts_scored": 7,
+      "successes": 7,
+      "disposition": "included as exploratory one-shot subset; host shell and desktop monitor disabled; stopped at cumulative user-authorized 30 provider-request cap"
+    }
+  ],
+  "overall_interpretation": "7/7 on the seven completed one-shot tasks is descriptive only; not a general success estimate. Planned 10-task set and three repetitions were not completed."
+}

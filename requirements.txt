@@ -1,0 +1,2 @@
+# Dione AI - Root Dependencies Reference
+-r server/requirements.txt

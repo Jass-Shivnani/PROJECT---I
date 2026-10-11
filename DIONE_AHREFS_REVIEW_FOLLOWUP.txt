@@ -1,0 +1,22 @@
+AHREFS PLAGIARISM CHECKER — EDITORIAL FOLLOW-UP
+
+Paper: Dione: A Local-First Orchestration Runtime for Ambient Personal Assistance
+Follow-up date: 11 October 2026
+Related checker output: C:/Users/Jass/Downloads/plagiarism-checker-20261011-172942.txt
+
+STATUS
+The attached checker output contains two qualitative summaries. Neither provides matched-source links, copied-text excerpts, or a similarity percentage. Both summaries state that they did not identify direct plagiarism. Their listed passages are manual-review flags, not findings of copied text.
+
+EDITORIAL ACTIONS AFTER THAT CHECK
+1. Rewrote the commercial-assistant privacy discussion to distinguish on-device processing from cloud processing and added the corresponding references.
+2. Added an explicit citation to the RAG overview statement.
+3. Confirmed that the Microsoft Agent Framework description cites its reference.
+4. Added an explicit MemGPT citation.
+5. Replaced the Ruan et al. paraphrase with a narrower summary of the cited study: its LM-emulated sandbox evaluation covered 36 high-stakes tools and 144 test cases and reported failures with potentially severe outcomes. Reference: arXiv:2309.15817.
+
+CURRENT FILES
+Revised manuscript: DIONE_IEEE_RESEARCH_PAPER_PUBLISHABLE.md and DIONE_IEEE_RESEARCH_PAPER_PUBLISHABLE.tex
+Plain-text copy for checking: DIONE_IEEE_RESEARCH_PAPER_AHREFS.txt (4,468 words)
+
+IMPORTANT STATUS NOTE
+The revised paper has not been rescanned by Ahrefs. This note records editorial changes only and does not represent a new checker result or a guarantee of originality. The original Ahrefs output should be retained as the record of its scan.

@@ -519,6 +519,12 @@ Respond with a JSON object:
 
         self.state = EngineState.IDLE
 
+    def clear_history(self):
+        """Clear conversation history for fresh benchmark or session execution."""
+        self._conversation_history.clear()
+        self._current_steps.clear()
+        self.state = EngineState.IDLE
+
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
@@ -542,15 +548,25 @@ Respond with a JSON object:
         return messages
 
     def _parse_llm_response(self, response: str) -> Optional[dict]:
-        """Parse the LLM's JSON response."""
+        """Parse the LLM's JSON response with robust fallbacks."""
+        clean = response.strip()
+        # Strip outer markdown blocks if present
+        if clean.startswith("```"):
+            clean = re.sub(r"^```(?:json)?\s*", "", clean)
+            clean = re.sub(r"\s*```$", "", clean)
+            clean = clean.strip()
+
         try:
-            # Try direct JSON parse
+            return json.loads(clean)
+        except json.JSONDecodeError:
+            pass
+
+        try:
             return json.loads(response)
         except json.JSONDecodeError:
             pass
 
         # Try extracting JSON from markdown code blocks
-        import re
         json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", response, re.DOTALL)
         if json_match:
             try:
@@ -558,13 +574,22 @@ Respond with a JSON object:
             except json.JSONDecodeError:
                 pass
 
-        # Try finding any JSON object in the response
-        json_match = re.search(r"\{[^{}]*\}", response, re.DOTALL)
+        # Try finding greedy outermost JSON object in the response
+        json_match = re.search(r"(\{.*\})", response, re.DOTALL)
         if json_match:
             try:
-                return json.loads(json_match.group(0))
+                return json.loads(json_match.group(1))
             except json.JSONDecodeError:
                 pass
+
+        # Fallback regex extraction for final_answer if unescaped quotes/backticks broke json.loads
+        fa_match = re.search(r'"final_answer"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"', response)
+        if fa_match:
+            th_match = re.search(r'"thought"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"', response)
+            return {
+                "thought": th_match.group(1) if th_match else "",
+                "final_answer": fa_match.group(1).encode().decode('unicode_escape', errors='replace')
+            }
 
         logger.warning(f"Could not parse LLM response as JSON: {response[:200]}")
         return None

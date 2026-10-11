@@ -96,9 +96,20 @@ class SafetyKernel:
         # All checks passed
         return SafetyCheckResult(allowed=True, risk_level="low")
 
+    def validate_command(self, command: str) -> SafetyCheckResult:
+        """Validate a system command string directly."""
+        @dataclass
+        class _CmdCall:
+            tool: str = "SystemPlugin.run_command"
+            params: dict = None
+        return self.validate_tool_call(_CmdCall(params={"command": command}))
+
     def _categorize_tool(self, tool_name: str) -> str:
         """Categorize a tool into risk categories."""
         tool_lower = tool_name.lower()
+
+        if any(kw in tool_lower for kw in ["computeruse", "computer_use", "desktop", "launch_app", "open_settings", "media_control", "adjust_volume"]):
+            return "desktop_automation"
 
         if any(kw in tool_lower for kw in ["delete", "remove", "drop", "rm"]):
             return "delete"
@@ -106,6 +117,8 @@ class SafetyKernel:
             return "send"
         if any(kw in tool_lower for kw in ["execute", "run", "shell", "command"]):
             return "execute"
+        if any(kw in tool_lower for kw in ["database", "db_query", "sql"]):
+            return "database"
         if any(kw in tool_lower for kw in ["write", "create", "save"]):
             return "write"
         if any(kw in tool_lower for kw in ["read", "get", "fetch", "list", "search"]):
@@ -127,6 +140,8 @@ class SafetyKernel:
             r"<\|im_start\|>",
             r"\[INST\]",
             r"forget\s+(everything|all|previous)",
+            r"DAN\b",
+            r"drop\s+(table|database)",
         ]
 
         params_str = str(params).lower()

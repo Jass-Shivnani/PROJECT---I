@@ -53,6 +53,12 @@ except ImportError:
     sys.exit(1)
 
 
+if sys.platform == "win32":
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 console = Console()
 
 # ─── Paths ─────────────────────────────────────────────────
@@ -100,6 +106,14 @@ def _is_first_run() -> bool:
 
 def _is_server_running() -> bool:
     """Check if Dione server is running."""
+    try:
+        import httpx
+        r = httpx.get("http://127.0.0.1:8900/api/status/telemetry", timeout=0.8)
+        if r.status_code == 200:
+            return True
+    except Exception:
+        pass
+
     if not PID_FILE.exists():
         return False
     try:
@@ -369,6 +383,86 @@ def start(
         console.print(f"[dim]Run [cyan]dione status[/cyan] to check, or [cyan]dione client[/cyan] to connect.[/dim]")
 
 
+@app.command(name="app")
+def launch_app(
+    port: int = typer.Option(8900, "--port", "-p", help="Server port"),
+    host: str = typer.Option("127.0.0.1", "--host", help="Server host"),
+):
+    """
+    Launch the Dione Desktop Application.
+    Ensures background engine is running, then opens the chromeless native desktop app.
+    """
+    import webbrowser
+    import httpx
+
+    url = f"http://{host}:{port}/"
+    is_running = False
+    try:
+        r = httpx.get(url, timeout=1.5)
+        if r.status_code == 200:
+            is_running = True
+    except Exception:
+        pass
+
+    if not is_running:
+        console.print("[cyan]Starting Dione background server...[/cyan]")
+        server_py = str(PROJECT_ROOT / ".venv" / "Scripts" / "python.exe")
+        if not os.path.exists(server_py):
+            server_py = sys.executable
+        server_cmd = [
+            server_py,
+            "-m",
+            "uvicorn",
+            "server.api.app:create_app",
+            "--factory",
+            "--host",
+            host,
+            "--port",
+            str(port),
+        ]
+        subprocess.Popen(
+            server_cmd,
+            cwd=str(PROJECT_ROOT),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+        for _ in range(30):
+            time.sleep(0.5)
+            try:
+                r = httpx.get(url, timeout=1.5)
+                if r.status_code == 200:
+                    is_running = True
+                    break
+            except Exception:
+                pass
+
+    edge_paths = [
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+    ]
+    opened = False
+    for ep in edge_paths:
+        if os.path.exists(ep):
+            subprocess.Popen([ep, f"--app={url}", "--window-size=1420,920"])
+            opened = True
+            break
+
+    if not opened:
+        chrome_paths = [
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+        ]
+        for cp in chrome_paths:
+            if os.path.exists(cp):
+                subprocess.Popen([cp, f"--app={url}", "--window-size=1420,920"])
+                opened = True
+                break
+
+    if not opened:
+        webbrowser.open(url)
+
+
 @app.command()
 def integrations(
     action: str = typer.Argument("list", help="Action: list, connect, disconnect, sync, grant"),
@@ -508,10 +602,9 @@ def client(
     in a rich terminal interface with markdown rendering.
     """
     # Determine server URL
+    _port = 8900
+    _host = "127.0.0.1"
     if not server:
-        # Try to get from config
-        _port = 8900
-        _host = "127.0.0.1"
         if ENV_PATH.exists():
             for line in ENV_PATH.read_text(encoding="utf-8").splitlines():
                 line = line.strip()
@@ -521,9 +614,50 @@ def client(
                         _port = int(v.strip())
                     if k.strip() == "DIONE_HOST":
                         h = v.strip()
-                        # For client, use localhost if server binds to 0.0.0.0
                         _host = "127.0.0.1" if h == "0.0.0.0" else h
         server = f"http://{_host}:{_port}"
+
+    import httpx
+    is_running = False
+    try:
+        r = httpx.get(f"{server}/api/status/info", timeout=1.5)
+        if r.status_code == 200:
+            is_running = True
+    except Exception:
+        pass
+
+    if not is_running:
+        console.print("[cyan]Starting Dione background server...[/cyan]")
+        server_py = str(PROJECT_ROOT / ".venv" / "Scripts" / "python.exe")
+        if not os.path.exists(server_py):
+            server_py = sys.executable
+        server_cmd = [
+            server_py,
+            "-m",
+            "uvicorn",
+            "server.api.app:create_app",
+            "--factory",
+            "--host",
+            _host,
+            "--port",
+            str(_port),
+        ]
+        subprocess.Popen(
+            server_cmd,
+            cwd=str(PROJECT_ROOT),
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+        )
+        for _ in range(30):
+            time.sleep(0.5)
+            try:
+                r = httpx.get(f"{server}/api/status/info", timeout=1.5)
+                if r.status_code == 200:
+                    is_running = True
+                    break
+            except Exception:
+                pass
 
     from server.cli.client import run_client
     run_client(server_url=server)

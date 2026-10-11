@@ -39,6 +39,15 @@ class ChatResponse(BaseModel):
     mood: Optional[dict] = None  # Dione's current mood
 
 
+@router.post("/chat/clear")
+async def clear_chat_history(request: Request):
+    """Clear conversation history on the active engine."""
+    engine = request.app.state.engine
+    if hasattr(engine, "clear_history"):
+        engine.clear_history()
+    return {"status": "ok", "message": "Conversation history cleared"}
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat_message(req: ChatRequest, request: Request):
     """
@@ -64,7 +73,7 @@ async def chat_message(req: ChatRequest, request: Request):
     tools_used = []
     sentiment_data = None
 
-    async for step in engine.process_message(req.message):
+    async for step in engine.process_message(req.message, conversation_id=req.conversation_id):
         # EngineStep dataclass: .state, .final_answer, .tool_call, .observation, .thought
         if step.state in (EngineState.COMPLETE, EngineState.ERROR) and step.final_answer:
             final_response = step.final_answer

@@ -1,0 +1,1431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dione Agent Studio</title>
+  <style>
+    :root {
+      --bg-base: #080911;
+      --bg-surface: #0f1220;
+      --bg-surface-elevated: #161a2e;
+      --bg-card: #141728;
+      --bg-card-hover: #1c213a;
+      --bg-input: #0a0c16;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-light: rgba(255, 255, 255, 0.14);
+      --border-focus: rgba(168, 85, 247, 0.5);
+      
+      --accent-purple: #a855f7;
+      --accent-purple-glow: rgba(168, 85, 247, 0.35);
+      --accent-indigo: #6366f1;
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-red: #ef4444;
+
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
+      --font-mono: "JetBrains Mono", Consolas, "SF Mono", monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: var(--font-sans);
+      user-select: none;
+    }
+
+    body {
+      background: var(--bg-base);
+      color: var(--text-main);
+      height: 100vh;
+      overflow: hidden;
+      display: flex;
+    }
+
+    /* ========================================= */
+    /* 1. FAR-LEFT NAVIGATION RAIL (Cherry Style)*/
+    /* ========================================= */
+    .nav-rail {
+      width: 64px;
+      background: #080911;
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 0;
+      gap: 16px;
+      flex-shrink: 0;
+      z-index: 10;
+    }
+
+    .rail-logo {
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #9333ea, #4f46e5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 18px;
+      color: white;
+      box-shadow: 0 0 20px rgba(147, 51, 234, 0.45);
+      cursor: pointer;
+      transition: transform 0.2s ease;
+    }
+
+    .rail-logo:hover {
+      transform: scale(1.06);
+    }
+
+    .rail-divider {
+      width: 32px;
+      height: 1px;
+      background: var(--border-subtle);
+      margin: 4px 0;
+    }
+
+    .rail-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-dim);
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .rail-btn:hover {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-main);
+    }
+
+    .rail-btn.active {
+      background: rgba(168, 85, 247, 0.15);
+      border-color: rgba(168, 85, 247, 0.4);
+      color: #c084fc;
+      box-shadow: 0 0 12px rgba(168, 85, 247, 0.25);
+    }
+
+    .rail-spacer {
+      flex: 1;
+    }
+
+    .rail-status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      box-shadow: 0 0 10px var(--accent-emerald);
+      margin-bottom: 8px;
+    }
+
+    /* ========================================= */
+    /* 2. TASK SESSIONS SIDEBAR                  */
+    /* ========================================= */
+    .sidebar {
+      width: 260px;
+      background: #0d0f1b;
+      border-right: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+
+    .sidebar-header {
+      padding: 18px 16px 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .sidebar-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .sidebar-title {
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: #cbd5e1;
+      text-transform: uppercase;
+    }
+
+    .new-task-btn {
+      background: linear-gradient(135deg, #9333ea, #4f46e5);
+      border: none;
+      color: white;
+      padding: 9px 14px;
+      border-radius: 9px;
+      font-size: 12px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
+    }
+
+    .new-task-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 16px rgba(147, 51, 234, 0.45);
+    }
+
+    .task-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .task-item {
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: transparent;
+      border: 1px solid transparent;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      transition: all 0.15s ease;
+    }
+
+    .task-item:hover {
+      background: var(--bg-card-hover);
+    }
+
+    .task-item.active {
+      background: var(--bg-card);
+      border-color: var(--border-light);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    }
+
+    .task-item-title {
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      color: #f1f5f9;
+    }
+
+    .task-item-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+
+    .task-badge {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+    }
+
+    .task-badge.completed { background: var(--accent-emerald); box-shadow: 0 0 6px var(--accent-emerald); }
+    .task-badge.running { background: var(--accent-cyan); box-shadow: 0 0 8px var(--accent-cyan); animation: pulse 1s infinite alternate; }
+    .task-badge.idle { background: var(--text-dim); }
+
+    /* Telemetry Mini-Meters */
+    .sidebar-footer {
+      padding: 14px 16px;
+      border-top: 1px solid var(--border-subtle);
+      background: #090b14;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .telemetry-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .meter-bar {
+      width: 100%;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .meter-fill {
+      height: 100%;
+      background: linear-gradient(90deg, #06b6d4, #a855f7);
+      border-radius: 2px;
+      transition: width 0.4s ease;
+    }
+
+    /* ========================================= */
+    /* 3. MAIN WORKSPACE CANVAS                  */
+    /* ========================================= */
+    .main-canvas {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-base);
+      overflow: hidden;
+    }
+
+    /* Top Navigation Bar */
+    .top-bar {
+      height: 56px;
+      padding: 0 20px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(13, 15, 27, 0.85);
+      backdrop-filter: blur(14px);
+      z-index: 5;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .state-orb {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      box-shadow: 0 0 10px var(--accent-emerald);
+      transition: all 0.3s ease;
+    }
+
+    .state-orb.thinking { background: var(--accent-amber); box-shadow: 0 0 12px var(--accent-amber); animation: pulse 0.8s infinite alternate; }
+    .state-orb.speaking { background: var(--accent-cyan); box-shadow: 0 0 12px var(--accent-cyan); animation: pulse 0.8s infinite alternate; }
+    .state-orb.acting { background: #ec4899; box-shadow: 0 0 12px #ec4899; }
+    .state-orb.paused { background: var(--accent-red); box-shadow: 0 0 12px var(--accent-red); }
+
+    .header-title-box {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header-task-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    .header-task-status {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Dual Mode Switcher Pill (Cherry / Taskhomie style) */
+    .mode-switch-group {
+      display: flex;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 3px;
+      gap: 2px;
+    }
+
+    .mode-btn {
+      padding: 5px 12px;
+      border-radius: 7px;
+      border: none;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .mode-btn.active {
+      background: linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(99, 102, 241, 0.3));
+      border: 1px solid rgba(168, 85, 247, 0.5);
+      color: #f1f5f9;
+      box-shadow: 0 2px 8px rgba(168, 85, 247, 0.2);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .header-pill {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      padding: 5px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: #cbd5e1;
+    }
+
+    .header-pill.failsafe {
+      border-color: rgba(245, 158, 11, 0.35);
+      color: #fde047;
+      cursor: help;
+    }
+
+    .abort-btn {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.35);
+      color: #f87171;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .abort-btn:hover {
+      background: var(--accent-red);
+      color: white;
+    }
+
+    /* Spoken Thinking Ribbon */
+    .bridge-ribbon {
+      background: linear-gradient(90deg, rgba(168, 85, 247, 0.1), rgba(6, 182, 212, 0.1));
+      border-bottom: 1px solid rgba(168, 85, 247, 0.18);
+      padding: 7px 20px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: #e2e8f0;
+      font-style: italic;
+    }
+
+    .bridge-ribbon .icon {
+      font-style: normal;
+      color: #c084fc;
+    }
+
+    /* Split Workspace */
+    .workspace-split {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1fr 420px;
+      overflow: hidden;
+      transition: grid-template-columns 0.3s ease;
+    }
+
+    .workspace-split.collapsed {
+      grid-template-columns: 1fr 0px;
+    }
+
+    /* Left Column: Chat & Checklist */
+    .transcript-col {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border-subtle);
+      overflow: hidden;
+    }
+
+    /* Step Checklist Card */
+    .plan-card {
+      margin: 14px 18px 6px 18px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 12px 16px;
+    }
+
+    .plan-header {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--accent-cyan);
+      margin-bottom: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .step-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 5px 0;
+      font-size: 12px;
+    }
+
+    .step-desc {
+      flex: 1;
+      color: #cbd5e1;
+    }
+
+    .step-desc.completed {
+      color: var(--text-dim);
+      text-decoration: line-through;
+    }
+
+    .step-tool {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--accent-purple);
+      background: rgba(168, 85, 247, 0.1);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    /* Messages Stream */
+    .messages-stream {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .msg-bubble {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      max-width: 85%;
+      padding: 12px 16px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      user-select: text;
+    }
+
+    .msg-bubble.user {
+      align-self: flex-end;
+      background: linear-gradient(135deg, #7c3aed, #4f46e5);
+      color: white;
+      border-bottom-right-radius: 4px;
+    }
+
+    .msg-bubble.assistant {
+      align-self: flex-start;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      color: #f1f5f9;
+      border-bottom-left-radius: 4px;
+    }
+
+    .msg-bubble.filler {
+      align-self: flex-start;
+      background: rgba(168, 85, 247, 0.08);
+      border: 1px solid rgba(168, 85, 247, 0.2);
+      color: #d8b4fe;
+      font-style: italic;
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+
+    /* Tool Execution Action Cards (Taskhomie / computer-agent style) */
+    .tool-card {
+      align-self: flex-start;
+      width: 100%;
+      max-width: 90%;
+      background: #0d0f1a;
+      border: 1px solid rgba(168, 85, 247, 0.25);
+      border-left: 3px solid var(--accent-purple);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .tool-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #c084fc;
+      font-weight: 600;
+    }
+
+    .tool-card-body {
+      color: #94a3b8;
+      font-size: 11px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    /* Markdown Styling Inside Assistant Bubbles */
+    .msg-bubble strong { color: #ffffff; font-weight: 700; }
+    .msg-bubble .code-block {
+      background: #06070e;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 6px;
+      padding: 10px;
+      margin: 6px 0;
+      overflow-x: auto;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: #38bdf8;
+    }
+    .msg-bubble .inline-code {
+      background: rgba(255, 255, 255, 0.08);
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: #f472b6;
+    }
+    .msg-bubble .md-ul { margin: 6px 0 6px 18px; }
+    .msg-bubble .md-li { margin: 3px 0; }
+
+    /* Bottom Prompt Dock */
+    .bottom-dock {
+      padding: 12px 18px;
+      background: rgba(13, 15, 27, 0.95);
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .chips-row {
+      display: flex;
+      gap: 7px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+
+    .chips-row::-webkit-scrollbar {
+      height: 3px;
+    }
+
+    .chip-btn {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.2s ease;
+    }
+
+    .chip-btn:hover {
+      background: rgba(168, 85, 247, 0.14);
+      border-color: rgba(168, 85, 247, 0.35);
+      color: #f1f5f9;
+    }
+
+    .prompt-box {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .prompt-input {
+      flex: 1;
+      background: var(--bg-input);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 11px 14px;
+      color: white;
+      font-size: 13px;
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    .prompt-input:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 14px var(--accent-purple-glow);
+    }
+
+    .voice-mic-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+      color: #e2e8f0;
+      font-size: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s ease;
+    }
+
+    .voice-mic-btn:hover {
+      background: rgba(6, 182, 212, 0.2);
+      border-color: var(--accent-cyan);
+    }
+
+    .run-btn {
+      background: linear-gradient(135deg, #9333ea, #4f46e5);
+      border: none;
+      color: white;
+      padding: 11px 18px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px rgba(147, 51, 234, 0.3);
+    }
+
+    .run-btn:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 6px 18px rgba(147, 51, 234, 0.45);
+    }
+
+    /* ========================================= */
+    /* 4. RIGHT INSPECTOR / TELEMETRY DRAWER     */
+    /* ========================================= */
+    .inspector-col {
+      display: flex;
+      flex-direction: column;
+      background: #0b0d18;
+      overflow: hidden;
+    }
+
+    .inspector-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border-subtle);
+      background: rgba(13, 15, 27, 0.6);
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 12px 8px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-dim);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn.active {
+      color: var(--text-main);
+      border-bottom-color: var(--accent-purple);
+      background: rgba(168, 85, 247, 0.08);
+    }
+
+    .inspector-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    /* Screen Preview Card */
+    .screen-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .screen-card-header {
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .screen-refresh-btn {
+      background: transparent;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      padding: 2px 7px;
+      border-radius: 4px;
+      font-size: 10px;
+      cursor: pointer;
+    }
+
+    .screen-refresh-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: white;
+    }
+
+    .screen-img {
+      width: 100%;
+      height: 190px;
+      object-fit: cover;
+      background: #000;
+      display: block;
+      cursor: crosshair;
+    }
+
+    /* Terminal Console */
+    .terminal-box {
+      flex: 1;
+      background: #05060b;
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 12px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: #38bdf8;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      line-height: 1.4;
+    }
+
+    .term-line {
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .term-line.cmd { color: #c084fc; font-weight: 600; }
+    .term-line.err { color: #f87171; }
+    .term-line.ok { color: #4ade80; }
+    .term-line.sys { color: #94a3b8; }
+
+    /* Dossier / Memory Card */
+    .dossier-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .dossier-name {
+      font-size: 13px;
+      font-weight: 700;
+      color: #f8fafc;
+    }
+
+    .dossier-role {
+      font-size: 11px;
+      color: var(--accent-cyan);
+    }
+
+    .dossier-commit {
+      font-size: 11px;
+      color: #cbd5e1;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 6px 8px;
+      border-radius: 6px;
+      border-left: 2px solid var(--accent-purple);
+      margin-top: 4px;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 0.6; transform: scale(0.92); }
+      100% { opacity: 1; transform: scale(1.08); }
+    }
+  </style>
+</head>
+<body>
+  <!-- 1. FAR-LEFT NAVIGATION RAIL (Cherry Studio Style) -->
+  <div class="nav-rail">
+    <div class="rail-logo" id="railLogo" title="Dione Autonomous Desktop Agent">D</div>
+    <div class="rail-divider"></div>
+    <button class="rail-btn active" id="railBtnChat" title="Task Threads & Chat">💬</button>
+    <button class="rail-btn" id="railBtnVision" title="Desktop Vision & Screen Grounding">👁️</button>
+    <button class="rail-btn" id="railBtnAmbient" title="Ambient 24/7 Cowork & Dream Engine">🌙</button>
+    <button class="rail-btn" id="railBtnContacts" title="Contacts & Knowledge Graph">👥</button>
+    <div class="rail-spacer"></div>
+    <div class="rail-status-dot" id="railStatusDot" title="Engine Online • Sub-2ms Traversal"></div>
+    <button class="rail-btn" id="railBtnCollapse" title="Toggle Inspector Drawer">◨</button>
+  </div>
+
+  <!-- 2. TASK SESSIONS SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title-row">
+        <span class="sidebar-title">Task Threads</span>
+      </div>
+      <button class="new-task-btn" id="newTaskBtn">
+        <span>+</span> <span>New Task</span>
+      </button>
+    </div>
+
+    <div class="task-list" id="taskList">
+      <!-- Injected via JavaScript -->
+    </div>
+
+    <!-- Telemetry Mini-Meters -->
+    <div class="sidebar-footer">
+      <div class="telemetry-row">
+        <span>CPU Telemetry</span>
+        <span id="cpuText">14%</span>
+      </div>
+      <div class="meter-bar"><div class="meter-fill" id="cpuMeter" style="width: 14%;"></div></div>
+
+      <div class="telemetry-row" style="margin-top: 4px;">
+        <span>RAM Free</span>
+        <span id="ramText">6.0 GB</span>
+      </div>
+      <div class="meter-bar"><div class="meter-fill" id="ramMeter" style="width: 48%;"></div></div>
+
+      <div class="telemetry-row" style="margin-top: 6px;">
+        <span>Physical Idle</span>
+        <span id="idleText">0s</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. MAIN WORKSPACE CANVAS -->
+  <div class="main-canvas">
+    <!-- Top Navigation Bar -->
+    <div class="top-bar">
+      <div class="header-left">
+        <div class="state-orb" id="stateOrb"></div>
+        <div class="header-title-box">
+          <div class="header-task-title" id="headerTitle">Workstation Telemetry</div>
+          <div class="header-task-status" id="headerStatus">Standing By</div>
+        </div>
+      </div>
+
+      <!-- Mode Switcher Pill (Computer Use vs Ambient Cowork) -->
+      <div class="mode-switch-group">
+        <button class="mode-btn active" id="modeBtnComputer" title="Active desktop control via mouse, keyboard, and Win32 messages">
+          <span>⚡</span> <span>Computer Use</span>
+        </button>
+        <button class="mode-btn" id="modeBtnAmbient" title="Silent background synthesis, memory consolidation, and pre-indexing">
+          <span>🌙</span> <span>24/7 Cowork</span>
+        </button>
+      </div>
+
+      <div class="header-right">
+        <div class="header-pill failsafe" id="failsafePill" title="Physical mouse movement instantly halts AI computer control">
+          <span>🛡️</span> <span>Mouse Fail-Safe Armed</span>
+        </div>
+        <div class="header-pill">
+          <span>🧠</span> <span>Gemini 2.5 Flash</span>
+        </div>
+        <div class="header-pill">
+          <span>🎙️</span> <span>Edge-TTS Neural</span>
+        </div>
+        <button class="abort-btn" id="abortBtn">
+          <span>🚨</span> <span>Halt</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Spoken Thinking Ribbon -->
+    <div class="bridge-ribbon" id="bridgeRibbon">
+      <span class="icon">💬</span>
+      <span id="bridgeText">"Ready for your instruction. What should we tackle?"</span>
+    </div>
+
+    <!-- Split Workspace -->
+    <div class="workspace-split" id="workspaceSplit">
+      <!-- Left Column: Transcript, Plan & Chat -->
+      <div class="transcript-col">
+        <!-- Checklist Plan Card -->
+        <div class="plan-card" id="planCard">
+          <div class="plan-header">
+            <span>Execution Plan & Sub-Tasks</span>
+            <span id="planStepCount">2 / 2 Done</span>
+          </div>
+          <div id="planStepsContainer">
+            <!-- Injected via JS -->
+          </div>
+        </div>
+
+        <!-- Chat Stream -->
+        <div class="messages-stream" id="messagesStream">
+          <!-- Injected via JS -->
+        </div>
+
+        <!-- Bottom Prompt Dock -->
+        <div class="bottom-dock">
+          <div class="chips-row">
+            <button class="chip-btn" data-goal="open valorant">🎮 Open Valorant</button>
+            <button class="chip-btn" data-goal="Change my mic to my IEMs">🎧 Switch Mic to IEMs</button>
+            <button class="chip-btn" data-goal="Inspect my screen and tell me what is open">👁️ Inspect Screen</button>
+            <button class="chip-btn" data-goal="How much RAM and CPU is currently free?">⚡ Check RAM & CPU</button>
+            <button class="chip-btn" data-goal="Open Spotify and play music">🎵 Open Spotify</button>
+            <button class="chip-btn" data-goal="Capture desktop screenshot">📸 Screenshot</button>
+            <button class="chip-btn" data-goal="What promises did I make to Prof. Geocey?">🤝 Review Commitments</button>
+            <button class="chip-btn" data-goal="What open windows are currently active?">🪟 Open Windows</button>
+          </div>
+
+          <div class="prompt-box">
+            <input type="text" class="prompt-input" id="goalInput" placeholder="Give Dione an autonomous task (e.g. 'Open Valorant', 'Switch mic', 'Check RAM')..." autocomplete="off" />
+            <button class="voice-mic-btn" id="micBtn" title="Speak to Dione (Edge-TTS Neural)">🎙️</button>
+            <button class="run-btn" id="runBtn">Run Task ↵</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right Column: Inspector & Vision -->
+      <div class="inspector-col" id="inspectorCol">
+        <div class="inspector-tabs">
+          <button class="tab-btn active" id="tabVision">Desktop Vision</button>
+          <button class="tab-btn" id="tabTerminal">Console</button>
+          <button class="tab-btn" id="tabContacts">Contacts</button>
+          <button class="tab-btn" id="tabBrief">Briefing</button>
+        </div>
+
+        <div class="inspector-content" id="inspectorContent">
+          <!-- Vision Panel -->
+          <div id="panelVision" style="display: flex; flex-direction: column; gap: 12px;">
+            <div class="screen-card">
+              <div class="screen-card-header">
+                <span>Current Screen Grounding</span>
+                <button class="screen-refresh-btn" id="screenRefreshBtn">Capture Now</button>
+              </div>
+              <img class="screen-img" id="screenImg" src="" alt="Desktop Vision Grounding" />
+            </div>
+            <div style="font-size: 11px; color: var(--text-dim); line-height: 1.4;">
+              Screen coordinates are normalized in real-time for high-DPI displays. Physical mouse fail-safe activates if movement exceeds 80px.
+            </div>
+          </div>
+
+          <!-- Console Panel -->
+          <div id="panelTerminal" style="display: none; height: 100%; flex-direction: column;">
+            <div class="terminal-box" id="terminalBox">
+              <div class="term-line sys">[Kernel] Initialized Frontier Tri-Actor Runtime</div>
+              <div class="term-line ok">[OK] PyAutoGUI & Windows UI Automation Attached</div>
+              <div class="term-line ok">[OK] Edge-TTS Neural Voice Synthesizer Ready</div>
+              <div class="term-line cmd">[ComputerUse] Physical mouse fail-safe armed and monitoring</div>
+            </div>
+          </div>
+
+          <!-- Contacts Panel -->
+          <div id="panelContacts" style="display: none; flex-direction: column; gap: 10px;">
+            <!-- Injected via JS -->
+          </div>
+
+          <!-- Briefing Panel -->
+          <div id="panelBrief" style="display: none; flex-direction: column; gap: 10px;">
+            <!-- Injected via JS -->
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let activeTask = null;
+    let allTasks = [];
+    let currentMode = 'computer_use';
+
+    // DOM Elements
+    const taskList = document.getElementById('taskList');
+    const headerTitle = document.getElementById('headerTitle');
+    const headerStatus = document.getElementById('headerStatus');
+    const stateOrb = document.getElementById('stateOrb');
+    const bridgeText = document.getElementById('bridgeText');
+    const planStepsContainer = document.getElementById('planStepsContainer');
+    const planStepCount = document.getElementById('planStepCount');
+    const messagesStream = document.getElementById('messagesStream');
+    const terminalBox = document.getElementById('terminalBox');
+    const screenImg = document.getElementById('screenImg');
+    const goalInput = document.getElementById('goalInput');
+    const runBtn = document.getElementById('runBtn');
+    const abortBtn = document.getElementById('abortBtn');
+    const newTaskBtn = document.getElementById('newTaskBtn');
+    const micBtn = document.getElementById('micBtn');
+    const workspaceSplit = document.getElementById('workspaceSplit');
+    const screenRefreshBtn = document.getElementById('screenRefreshBtn');
+
+    // Telemetry meters
+    const cpuMeter = document.getElementById('cpuMeter');
+    const cpuText = document.getElementById('cpuText');
+    const ramMeter = document.getElementById('ramMeter');
+    const ramText = document.getElementById('ramText');
+    const idleText = document.getElementById('idleText');
+
+    // Mode Buttons
+    const modeBtnComputer = document.getElementById('modeBtnComputer');
+    const modeBtnAmbient = document.getElementById('modeBtnAmbient');
+
+    modeBtnComputer.addEventListener('click', () => setMode('computer_use'));
+    modeBtnAmbient.addEventListener('click', () => setMode('ambient_cowork'));
+
+    function setMode(mode) {
+      currentMode = mode;
+      if (mode === 'computer_use') {
+        modeBtnComputer.classList.add('active');
+        modeBtnAmbient.classList.remove('active');
+        bridgeText.textContent = '"Computer Use Mode Active. Ready to interact with desktop apps & games."';
+      } else {
+        modeBtnAmbient.classList.add('active');
+        modeBtnComputer.classList.remove('active');
+        bridgeText.textContent = '"Ambient 24/7 Cowork Active. Silent synthesis & memory indexing enabled."';
+      }
+      if (window.pywebview) {
+        window.pywebview.api.toggle_mode(mode);
+      }
+      appendTerminal(`[Mode Changed] Active harness mode set to ${mode}`, 'cmd');
+    }
+
+    // Tab switcher in inspector
+    const tabVision = document.getElementById('tabVision');
+    const tabTerminal = document.getElementById('tabTerminal');
+    const tabContacts = document.getElementById('tabContacts');
+    const tabBrief = document.getElementById('tabBrief');
+
+    const panelVision = document.getElementById('panelVision');
+    const panelTerminal = document.getElementById('panelTerminal');
+    const panelContacts = document.getElementById('panelContacts');
+    const panelBrief = document.getElementById('panelBrief');
+
+    function selectTab(activeTab, activePanel) {
+      [tabVision, tabTerminal, tabContacts, tabBrief].forEach(t => t.classList.remove('active'));
+      [panelVision, panelTerminal, panelContacts, panelBrief].forEach(p => p.style.display = 'none');
+
+      activeTab.classList.add('active');
+      activePanel.style.display = (activePanel === panelTerminal ? 'flex' : 'flex');
+    }
+
+    tabVision.addEventListener('click', () => selectTab(tabVision, panelVision));
+    tabTerminal.addEventListener('click', () => selectTab(tabTerminal, panelTerminal));
+    tabContacts.addEventListener('click', () => {
+      selectTab(tabContacts, panelContacts);
+      loadContacts();
+    });
+    tabBrief.addEventListener('click', () => {
+      selectTab(tabBrief, panelBrief);
+      loadBriefing();
+    });
+
+    // Navigation Rail Buttons
+    document.getElementById('railBtnChat').addEventListener('click', () => {
+      document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('railBtnChat').classList.add('active');
+    });
+
+    document.getElementById('railBtnVision').addEventListener('click', () => {
+      selectTab(tabVision, panelVision);
+    });
+
+    document.getElementById('railBtnAmbient').addEventListener('click', () => {
+      selectTab(tabBrief, panelBrief);
+      loadBriefing();
+    });
+
+    document.getElementById('railBtnContacts').addEventListener('click', () => {
+      selectTab(tabContacts, panelContacts);
+      loadContacts();
+    });
+
+    document.getElementById('railBtnCollapse').addEventListener('click', () => {
+      workspaceSplit.classList.toggle('collapsed');
+    });
+
+    // Quick Action Chips
+    document.querySelectorAll('.chip-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        goalInput.value = btn.getAttribute('data-goal');
+        executeCurrentInput();
+      });
+    });
+
+    // Emergency Abort
+    abortBtn.addEventListener('click', () => {
+      if (window.pywebview) {
+        window.pywebview.api.emergency_stop();
+      }
+      appendTerminal('🚨 EMERGENCY STOP TRIGGERED BY USER', 'err');
+      stateOrb.className = 'state-orb paused';
+      headerStatus.textContent = 'Paused (Halt Triggered)';
+      bridgeText.textContent = '"Emergency stop triggered. Actions halted."';
+    });
+
+    // Run Button & Enter Key
+    runBtn.addEventListener('click', executeCurrentInput);
+    goalInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') executeCurrentInput();
+    });
+
+    // Mic Button
+    micBtn.addEventListener('click', () => {
+      if (window.pywebview) {
+        window.pywebview.api.start_voice();
+      }
+      stateOrb.className = 'state-orb speaking';
+      bridgeText.textContent = '"Listening for your voice command..."';
+    });
+
+    // New Task Button
+    newTaskBtn.addEventListener('click', () => {
+      const title = prompt("Enter a goal for the new task:", "Launch and test application");
+      if (title && window.pywebview) {
+        window.pywebview.api.create_new_task(title);
+      }
+    });
+
+    // Screenshot Refresh
+    screenRefreshBtn.addEventListener('click', () => {
+      if (window.pywebview) {
+        window.pywebview.api.capture_desktop_now().then(b64 => {
+          if (b64) screenImg.src = 'data:image/jpeg;base64,' + b64;
+        });
+      }
+    });
+
+    function executeCurrentInput() {
+      const text = goalInput.value.trim();
+      if (!text) return;
+      goalInput.value = '';
+
+      stateOrb.className = 'state-orb thinking';
+      headerStatus.textContent = 'Reasoning & Planning...';
+
+      if (window.pywebview) {
+        window.pywebview.api.submit_task(text);
+      }
+      appendTerminal(`[Task Started] ${text}`, 'cmd');
+    }
+
+    function appendTerminal(line, type = '') {
+      const div = document.createElement('div');
+      div.className = 'term-line ' + type;
+      div.textContent = line;
+      terminalBox.appendChild(div);
+      terminalBox.scrollTop = terminalBox.scrollHeight;
+    }
+
+    // Markdown Formatter
+    function formatMarkdown(text) {
+      if (!text) return '';
+      let html = text
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/```(\w+)?\n([\s\S]*?)```/g, (m, lang, code) => `<pre class="code-block"><code>${code}</code></pre>`)
+        .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+        .replace(/^\s*[-•]\s+(.*$)/gim, '<li class="md-li">$1</li>')
+        .replace(/(<li.*<\/li>)/s, '<ul class="md-ul">$1</ul>')
+        .replace(/\n\n/g, '<br/><br/>')
+        .replace(/\n/g, '<br/>');
+      return html;
+    }
+
+    // Render active task state
+    window.renderTaskState = function(taskData) {
+      activeTask = taskData;
+      headerTitle.textContent = taskData.title;
+      headerStatus.textContent = `Status: ${taskData.status.toUpperCase()}`;
+
+      // Render steps
+      planStepsContainer.innerHTML = '';
+      let doneCount = 0;
+      taskData.steps.forEach(s => {
+        if (s.status === 'completed') doneCount++;
+        const div = document.createElement('div');
+        div.className = 'step-item';
+        const isDone = s.status === 'completed';
+        const icon = isDone ? '✅' : (s.status === 'running' ? '⚡' : '⏳');
+        div.innerHTML = `
+          <span>${icon}</span>
+          <span class="step-desc ${isDone ? 'completed' : ''}">${s.description}</span>
+          <span class="step-tool">${s.tool || 'Planner'}</span>
+        `;
+        planStepsContainer.appendChild(div);
+      });
+      planStepCount.textContent = `${doneCount} / ${taskData.steps.length} Done`;
+
+      // Render messages
+      messagesStream.innerHTML = '';
+      taskData.messages.forEach(m => {
+        const div = document.createElement('div');
+        div.className = `msg-bubble ${m.role}`;
+        div.innerHTML = formatMarkdown(m.text);
+        messagesStream.appendChild(div);
+      });
+      messagesStream.scrollTop = messagesStream.scrollHeight;
+
+      // Update screenshot if any
+      if (taskData.screenshots && taskData.screenshots.length > 0) {
+        const lastShot = taskData.screenshots[taskData.screenshots.length - 1];
+        if (window.pywebview) {
+          window.pywebview.api.get_screenshot_base64(lastShot).then(b64 => {
+            if (b64) screenImg.src = 'data:image/jpeg;base64,' + b64;
+          });
+        }
+      }
+    };
+
+    window.renderTaskList = function(tasks) {
+      allTasks = tasks;
+      taskList.innerHTML = '';
+      tasks.forEach(t => {
+        const div = document.createElement('div');
+        div.className = `task-item ${activeTask && activeTask.id === t.id ? 'active' : ''}`;
+        div.onclick = () => {
+          if (window.pywebview) window.pywebview.api.select_task(t.id);
+        };
+        div.innerHTML = `
+          <div class="task-item-title">${t.title}</div>
+          <div class="task-item-meta">
+            <span>${t.created_at}</span>
+            <span class="task-badge ${t.status}"></span>
+          </div>
+        `;
+        taskList.appendChild(div);
+      });
+    };
+
+    // Receive streaming event bus messages
+    window.receiveStudioEvent = function(event) {
+      if (event.type === 'speech_chunk') {
+        bridgeText.textContent = `"${event.payload.text}"`;
+        if (event.payload.is_filler) {
+          stateOrb.className = 'state-orb speaking';
+        }
+      } else if (event.type === 'state_changed') {
+        stateOrb.className = 'state-orb ' + event.payload.to;
+        headerStatus.textContent = event.payload.reason || event.payload.to;
+      } else if (event.type === 'tool_dispatched') {
+        renderToolCard(event.payload.tool, event.payload.params, 'running');
+        appendTerminal(`[Tool Dispatched] ${event.payload.tool} ${JSON.stringify(event.payload.params || {})}`, 'cmd');
+      } else if (event.type === 'tool_completed') {
+        renderToolCard(event.payload.tool, event.payload.result, 'completed');
+        appendTerminal(`[Tool Completed] ${event.payload.result}`, 'ok');
+      } else if (event.type === 'tool_progress') {
+        if (event.payload.description) {
+          bridgeText.textContent = `"${event.payload.description}"`;
+        }
+      } else if (event.type === 'screenshot_captured') {
+        if (event.payload.path && window.pywebview) {
+          window.pywebview.api.get_screenshot_base64(event.payload.path).then(b64 => {
+            if (b64) screenImg.src = 'data:image/jpeg;base64,' + b64;
+          });
+        }
+      }
+    };
+
+    function renderToolCard(tool, details, status) {
+      const card = document.createElement('div');
+      card.className = 'tool-card';
+      const isDone = status === 'completed';
+      const icon = isDone ? '✅' : '⚡';
+      card.innerHTML = `
+        <div class="tool-card-header">
+          <span>${icon} ${tool}</span>
+          <span style="color: ${isDone ? 'var(--accent-emerald)' : 'var(--accent-cyan)'};">${status.toUpperCase()}</span>
+        </div>
+        <div class="tool-card-body">${typeof details === 'object' ? JSON.stringify(details, null, 2) : details}</div>
+      `;
+      messagesStream.appendChild(card);
+      messagesStream.scrollTop = messagesStream.scrollHeight;
+    }
+
+    // Load Contacts & Social Dossiers
+    function loadContacts() {
+      if (!window.pywebview) return;
+      window.pywebview.api.get_social_dossiers().then(dossiers => {
+        panelContacts.innerHTML = '';
+        if (!dossiers || dossiers.length === 0) {
+          panelContacts.innerHTML = '<div style="font-size: 12px; color: var(--text-dim);">No contacts found.</div>';
+          return;
+        }
+        dossiers.forEach(d => {
+          const div = document.createElement('div');
+          div.className = 'dossier-card';
+          let commHtml = '';
+          if (d.commitments && d.commitments.length > 0) {
+            d.commitments.forEach(c => {
+              commHtml += `<div class="dossier-commit">📌 ${c.description} (Due: ${c.due_date})</div>`;
+            });
+          }
+          div.innerHTML = `
+            <div class="dossier-name">${d.canonical_name}</div>
+            <div class="dossier-role">${d.role} • ${d.organization || 'VESIT'}</div>
+            ${commHtml}
+          `;
+          panelContacts.appendChild(div);
+        });
+      });
+    }
+
+    // Load Ambient Briefing
+    function loadBriefing() {
+      if (!window.pywebview) return;
+      window.pywebview.api.get_morning_brief().then(brief => {
+        panelBrief.innerHTML = '';
+        const div = document.createElement('div');
+        div.className = 'dossier-card';
+        let topicsHtml = (brief.topics || []).map(t => `<li style="margin: 4px 0;">${t}</li>`).join('');
+        div.innerHTML = `
+          <div class="dossier-name" style="color: #c084fc;">🌙 Ambient Briefing Card</div>
+          <div style="font-size: 12px; color: #cbd5e1; margin-top: 6px;">${brief.summary || ''}</div>
+          <div style="font-size: 11px; font-weight: 700; color: var(--accent-cyan); margin-top: 10px;">Pre-Indexed Research Topics:</div>
+          <ul style="font-size: 11px; color: var(--text-muted); margin-left: 18px; margin-top: 4px;">
+            ${topicsHtml}
+          </ul>
+          <div style="font-size: 11px; color: var(--accent-emerald); margin-top: 10px;">
+            ✓ All context ready for zero-latency retrieval.
+          </div>
+        `;
+        panelBrief.appendChild(div);
+      });
+    }
+
+    // Telemetry Poller (every 2.5s)
+    setInterval(() => {
+      if (window.pywebview && window.pywebview.api.get_telemetry) {
+        window.pywebview.api.get_telemetry().then(data => {
+          if (!data) return;
+          cpuText.textContent = `${Math.round(data.cpu_percent)}%`;
+          cpuMeter.style.width = `${Math.min(100, Math.round(data.cpu_percent))}%`;
+          ramText.textContent = `${data.ram_free_gb} GB`;
+          ramMeter.style.width = `${Math.round(data.ram_percent)}%`;
+          idleText.textContent = `${Math.round(data.idle_seconds)}s`;
+        }).catch(() => {});
+      }
+    }, 2500);
+
+    // Initial desktop screenshot
+    setTimeout(() => {
+      if (window.pywebview && window.pywebview.api.capture_desktop_now) {
+        window.pywebview.api.capture_desktop_now().then(b64 => {
+          if (b64) screenImg.src = 'data:image/jpeg;base64,' + b64;
+        });
+      }
+    }, 1000);
+  </script>
+</body>
+</html>

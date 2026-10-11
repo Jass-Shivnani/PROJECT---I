@@ -61,70 +61,58 @@ class GeminiAdapter(BaseLLMAdapter):
                 system_instruction = msg.content
                 break
 
-        try:
-            from google.genai import types
+        from google.genai import types
 
-            config = types.GenerateContentConfig(
-                temperature=request.temperature,
-                max_output_tokens=request.max_tokens,
-            )
-            if system_instruction:
-                config.system_instruction = system_instruction
-            if request.json_mode:
-                config.response_mime_type = "application/json"
+        config = types.GenerateContentConfig(
+            temperature=request.temperature,
+            max_output_tokens=request.max_tokens,
+        )
+        if system_instruction:
+            config.system_instruction = system_instruction
+        if request.json_mode:
+            config.response_mime_type = "application/json"
 
-            response = self._client.models.generate_content(
-                model=self.model,
-                contents=contents,
-                config=config,
-            )
+        # Model candidates with automatic fallback
+        candidates = [self.model, "gemini-3.8-flash", "gemini-3.5-flash"]
+        # Deduplicate preserving order
+        candidates = list(dict.fromkeys(candidates))
 
-            latency = (time.monotonic() - start) * 1000
-
-            content = response.text or ""
-            usage = response.usage_metadata
-
-            return LLMResponse(
-                content=content,
-                model=self.model,
-                prompt_tokens=getattr(usage, "prompt_token_count", 0) if usage else 0,
-                completion_tokens=getattr(usage, "candidates_token_count", 0) if usage else 0,
-                total_tokens=getattr(usage, "total_token_count", 0) if usage else 0,
-                finish_reason="stop",
-                latency_ms=latency,
-            )
-        except Exception as e:
-            error_str = str(e)
-            # Retry on rate limit (429) with exponential backoff
-            if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                for attempt in range(1, 4):  # 3 retries
-                    wait = 2 ** attempt  # 2, 4, 8 seconds
-                    logger.warning(f"Gemini rate limited, retrying in {wait}s (attempt {attempt}/3)")
-                    await asyncio.sleep(wait)
-                    try:
-                        response = self._client.models.generate_content(
-                            model=self.model,
-                            contents=contents,
-                            config=config,
-                        )
-                        latency = (time.monotonic() - start) * 1000
-                        content = response.text or ""
-                        usage = response.usage_metadata
-                        return LLMResponse(
-                            content=content,
-                            model=self.model,
-                            prompt_tokens=getattr(usage, "prompt_token_count", 0) if usage else 0,
-                            completion_tokens=getattr(usage, "candidates_token_count", 0) if usage else 0,
-                            total_tokens=getattr(usage, "total_token_count", 0) if usage else 0,
-                            finish_reason="stop",
-                            latency_ms=latency,
-                        )
-                    except Exception:
-                        if attempt == 3:
-                            break
+        last_error = None
+        for candidate in candidates:
+            for attempt in range(1, 4):
+                try:
+                    response = self._client.models.generate_content(
+                        model=candidate,
+                        contents=contents,
+                        config=config,
+                    )
+                    latency = (time.monotonic() - start) * 1000
+                    content = response.text or ""
+                    usage = response.usage_metadata
+                    return LLMResponse(
+                        content=content,
+                        model=candidate,
+                        prompt_tokens=getattr(usage, "prompt_token_count", 0) if usage else 0,
+                        completion_tokens=getattr(usage, "candidates_token_count", 0) if usage else 0,
+                        total_tokens=getattr(usage, "total_token_count", 0) if usage else 0,
+                        finish_reason="stop",
+                        latency_ms=latency,
+                    )
+                except Exception as e:
+                    last_error = e
+                    err_str = str(e)
+                    is_transient = any(code in err_str for code in ["503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "DeadlineExceeded"])
+                    if is_transient and attempt < 3:
+                        wait = 1.5 * attempt
+                        logger.warning(f"Gemini {candidate} transient error ({err_str[:80]}), retrying in {wait:.1f}s (attempt {attempt}/3)")
+                        await asyncio.sleep(wait)
                         continue
-            logger.error(f"Gemini generation error: {e}")
-            raise
+                    else:
+                        logger.warning(f"Gemini model {candidate} attempt {attempt} failed: {err_str[:120]}")
+                        break  # Try next candidate model
+
+        logger.error(f"All Gemini candidates failed. Last error: {last_error}")
+        raise last_error
 
     async def stream(self, request: LLMRequest) -> AsyncGenerator[str, None]:
         """Stream tokens from Gemini."""
@@ -138,28 +126,43 @@ class GeminiAdapter(BaseLLMAdapter):
                 system_instruction = msg.content
                 break
 
-        try:
-            from google.genai import types
+        from google.genai import types
 
-            config = types.GenerateContentConfig(
-                temperature=request.temperature,
-                max_output_tokens=request.max_tokens,
-            )
-            if system_instruction:
-                config.system_instruction = system_instruction
+        config = types.GenerateContentConfig(
+            temperature=request.temperature,
+            max_output_tokens=request.max_tokens,
+        )
+        if system_instruction:
+            config.system_instruction = system_instruction
 
-            response = self._client.models.generate_content_stream(
-                model=self.model,
-                contents=contents,
-                config=config,
-            )
+        candidates = [self.model]
+        if "gemini-3.8-flash" in self.model:
+            candidates.append("gemini-3.5-flash")
+        elif "gemini-3.5-flash" in self.model:
+            candidates.append("gemini-3.8-flash")
+        else:
+            candidates.extend(["gemini-3.8-flash", "gemini-3.5-flash"])
+        candidates = list(dict.fromkeys(candidates))
 
-            for chunk in response:
-                if chunk.text:
-                    yield chunk.text
-        except Exception as e:
-            logger.error(f"Gemini streaming error: {e}")
-            raise
+        last_error = None
+        for candidate in candidates:
+            try:
+                response = self._client.models.generate_content_stream(
+                    model=candidate,
+                    contents=contents,
+                    config=config,
+                )
+                for chunk in response:
+                    if chunk.text:
+                        yield chunk.text
+                return
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Gemini streaming {candidate} failed: {e}. Trying fallback...")
+                continue
+
+        logger.error(f"Gemini streaming failed across all candidates: {last_error}")
+        raise last_error
 
     def _build_contents(self, messages) -> list:
         """Convert LLMMessages to Gemini content format."""
@@ -203,6 +206,43 @@ class GeminiAdapter(BaseLLMAdapter):
             "provider": "google-gemini",
             "type": "cloud",
         }
+
+    async def generate_vision(self, prompt: str, image_bytes: bytes, json_mode: bool = False) -> str:
+        """Generate response given an image and prompt using multimodal Gemini."""
+        self._ensure_client()
+        from google.genai import types
+
+        config = types.GenerateContentConfig(
+            temperature=0.2,
+            max_output_tokens=1024,
+        )
+        if json_mode:
+            config.response_mime_type = "application/json"
+
+        image_part = types.Part.from_bytes(
+            data=image_bytes,
+            mime_type="image/png",
+        )
+
+        candidates = [self.model, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+        candidates = list(dict.fromkeys(candidates))
+
+        last_error = None
+        for candidate in candidates:
+            try:
+                response = self._client.models.generate_content(
+                    model=candidate,
+                    contents=[prompt, image_part],
+                    config=config,
+                )
+                return response.text or ""
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Gemini vision {candidate} failed: {e}. Trying fallback...")
+                continue
+
+        logger.error(f"Gemini vision failed across all candidates: {last_error}")
+        raise last_error
 
     async def close(self):
         """No persistent connection to close."""

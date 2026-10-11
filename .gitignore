@@ -74,8 +74,18 @@ docs/openclaw-main/
 docs/openclaw-main.zip
 docs/Synopsis.pdf
 
+# External reference repos & archives
+references/
+archive/
+
 # Secrets
 credentials/
 tokens/
 *.pem
 *.key
+
+# Large archives (>50MB) and office locks
+Dione_AI_Capstone_Group19.zip
+DIONE_FINAL_CAPSTONE_SUBMISSION.zip
+~$*
+docs/~$*
