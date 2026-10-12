@@ -1,21 +1,12 @@
 """
-patch_publication_pdf.py
-------------------------
-Surgically patches the compiled IEEE A4 PDF with authentic empirical figures
-and 100% human-authored academic text provided by the user.
-
-Eliminates all AI detection fingerprints (Turnitin AI, GPTZero) across all 8 pages:
-  - Page 1: Humanized Abstract & Index Terms, Humanized Introduction (Col 2)
-  - Page 2: Humanized Contributions (Col 1), AutoGPT, Memory (RAG/MemGPT/GraphRAG), Security, Sec III
-  - Page 3: Figure 1 Architecture Flowchart
-  - Page 4: Humanized Affective Modeling, Adaptive Heartbeat, Poset Lattice, Win32
-  - Page 5: Humanized Win32 Actuation Math, Figures 2-6 with Clean Captions
-  - Page 6: Humanized Benchmark Tasks, Threats, 10-task Breakdown, Section V-A Future Work
-  - Page 7: Clean IEEE Table 1, Future Work (V-B, V-C), Grounded Conclusion
-  - Page 8: Extended Peer-Reviewed Bibliography (References 19 to 27)
+apply_turnitin47_humanized.py
+-----------------------------
+Applies all humanized text blocks received from the user (addressing all cyan
+highlights from Turnitin report trn:oid:::1:3676704521, 47% AI) into
+patch_publication_pdf.py and executes compilation.
 """
 
-import sys
+import json
 import shutil
 from pathlib import Path
 import fitz
@@ -27,6 +18,8 @@ BASE_PDF = DOCS_DIR / "base_ieee_a4.pdf"
 TARGET_PDF = DOCS_DIR / "DIONE_IEEE_RESEARCH_PAPER_A4.pdf"
 DOWNLOADS_PDF = Path(r"C:\Users\Jass\Downloads\DIONE_IEEE_RESEARCH_PAPER_A4.pdf")
 
+with open(BASE_DIR / "received_humanized_batch_turnitin47.json", "r", encoding="utf-8") as f:
+    data = json.load(f)
 
 def clean_typography(text: str) -> str:
     if not isinstance(text, str):
@@ -38,6 +31,10 @@ def clean_typography(text: str) -> str:
             .replace("”", "\"")
             .replace("—", "---")
             .replace("–", "--")
+            .replace("‑", "-")
+            .replace("‒", "-")
+            .replace("…", "...")
+            .replace("\u00a0", " ")
             .replace("±", "+-")
     )
 
@@ -48,26 +45,20 @@ def _safe_insert_textbox(self, rect, buffer, *args, **kwargs):
 fitz.Page.insert_textbox = _safe_insert_textbox
 
 
-def patch_pdf():
-    # If base_ieee_a4.pdf does not exist, cache it from git
-    if not BASE_PDF.exists():
-        import subprocess
-        raw = subprocess.check_output(['git', 'show', 'ff65e22:docs/DIONE_IEEE_RESEARCH_PAPER_A4.pdf'])
-        BASE_PDF.write_bytes(raw)
-        print(f"Cached pristine base PDF: {BASE_PDF}")
-
+def build_patched_pdf():
     print(f"Opening clean base PDF: {BASE_PDF}")
     doc = fitz.open(BASE_PDF)
 
-    # -------------------------------------------------------------------------
-    # 1. PAGE 1: Humanized Abstract, Index Terms & Introduction
-    # -------------------------------------------------------------------------
-    print("Patching Page 1: Abstract, Index Terms, and Introduction...")
+    # =========================================================================
+    # 1. PAGE 1: Abstract & Introduction
+    # =========================================================================
+    print("Patching Page 1...")
     p1 = doc[0]
     p1.add_redact_annot(fitz.Rect(47.6, 249.0, 292.0, 655.0), fill=(1, 1, 1))
     p1.add_redact_annot(fitz.Rect(303.5, 248.0, 548.0, 735.0), fill=(1, 1, 1))
     p1.apply_redactions()
 
+    c1 = data['chunk_1'].strip()
     abstract_text = (
         "Abstract---Consumer operating systems contain our most sensitive digital information, "
         "such as passwords, email conversations, the structure of file systems, and personal schedules. "
@@ -85,31 +76,26 @@ def patch_pdf():
         "relevance and density plus a single-item safety check. This setup guarantees a 1/2-approximation without "
         "going over the limit. For keeping long-term memory the incremental NetworkX multigraph does probabilistic "
         "path ranking. It handles multi-hop entity queries quickly, averaging 1.158 milliseconds with a variation "
-        "of plus or minus 0.241 ms. Background tasks are managed by a piecewise adaptive heartbeat scheduler. "
-        "This scheduler adjusts how often it checks in starting at 30 seconds and slowing down to 900 seconds "
-        "when the system is idle. Also a multi-axis affective engine monitors user mood. When the user seems "
-        "urgent or frustrated it changes task priorities to respond. Tool execution is limited by a 5-level "
-        "permission structure that uses a poset lattice with pop-up prompts asking for confirmation each time. "
-        "It also uses a Win32 desktop station hook to get around the Session 0 black screen problem. On hardware "
-        "Dione completed 27.6% of tasks overall when tested on GAIA and AgentBench benchmarks. That’s 50.0% on "
-        "machines (5 out of 10 tasks passed). It caught 62.0% of prompt injections (62 out of 100 attempts), "
-        "which means 38.0% of attacks still got through using indirect methods. It cut down the context token "
-        "load by 65.2% compared to adding everything without compression at Turn 30, using 32.5% more memory "
-        "than MemGPT. Graph lookups stayed under 2ms but over five sessions memory recall dropped to 34.5% "
-        "because of synonym fragmentation in the graph. In hybrid mode it needed 463.1 MB of active RAM. "
-        "When running the 8B model on-device it used 5,313 MB."
+        "of plus or minus 0.241 ms. "
+        + c1 + " "
+        "It cut down the context token load by 65.2% compared to adding everything without compression at Turn 30, "
+        "using 32.5% more memory than MemGPT. Graph lookups stayed under 2ms but over five sessions memory recall "
+        "dropped to 34.5% because of synonym fragmentation in the graph. In hybrid mode it needed 463.1 MB of active "
+        "RAM. When running the 8B model on-device it used 5,313 MB."
     )
     index_terms_text = (
         "Index Terms---Large Action Models (LAM), Microsoft Agent Framework, Relational Knowledge Graphs, "
         "Knapsack Optimization, On-Device Inference, Agent Security Middleware, Ambient Computing."
     )
-    full_abstract_block = abstract_text + "\n\n" + index_terms_text
+    full_abstract = abstract_text + "\n\n" + index_terms_text
     rc_abs = p1.insert_textbox(
         fitz.Rect(47.6, 249.0, 291.8, 655.0),
-        full_abstract_block, fontsize=7.7, fontname="times-bold", lineheight=1.14
+        full_abstract, fontsize=7.6, fontname="times-bold", lineheight=1.13
     )
     print(f"  -> Page 1 Abstract rc: {rc_abs}")
 
+    c2 = data['chunk_2'].strip()
+    c3 = data['chunk_3'].strip()
     p1_col2_text = (
         "filesystem directories, and coordinate software tools. Commercial "
         "platforms like Apple Siri, Google Gemini and Windows Copilot send "
@@ -119,38 +105,22 @@ def patch_pdf():
         "networks. This creates privacy problems, for students, software engineers "
         "and groups that care a lot about privacy:\n\n"
         "1) Losing control over your data: When you store messages, code and login "
-        "info on someone else’s cloud you’re giving up control. That means your data "
-        "could be collected by the company or suddenly changed by rules you didn’t expect.\n"
-        "2) Sleepy tools that don’t help: now cloud assistants sit idle until you click "
-        "on them. They don’t watch what’s happening on your desktop in the background. "
-        "So they can’t learn your habits or give you tips before you even ask.\n"
-        "3) Memory that forgets context: Most AI systems use cosine similarity to find "
-        "matching text. After a few weeks of talking this breaks down. Words like review "
-        "or project get mixed up. So when you ask for something like Find the lab report "
-        "I talked about with Prof. Shejy Thursday the system can’t find it.\n"
-        "4) Dangerous tools that run wild: Autonomous agents with access to your terminal "
-        "can get stuck in endless loops or run harmful commands. This happens if someone "
-        "sends a file that tricks the AI into following instructions, even if you didn’t mean to.\n\n"
-        "Running foundation models like Mistral-7B or LLaMA-3-8B on a local machine using "
-        "Ollama keeps data on the device. Raw model weights are not digital assistants. "
-        "They cannot click buttons. They forget chats once the 8K context fills up. "
-        "Compact 7B models often invent non-existent command flags.\n\n"
-        "To solve these real-world problems our capstone team designed and built Dione. "
-        "Dione is an on-device Large Action Model runtime built on top of the Microsoft "
-        "Agent Framework (MAF 1.21.0) [4]. Dione runs operating system tools, searches "
-        "disk-backed multigraphs, and runs background routines. None of these actions "
-        "send user data to cloud servers."
+        "info on someone else's cloud you're giving up control. That means your data "
+        "could be collected by the company or suddenly changed by rules you didn't expect.\n"
+        "2) Sleepy tools that don't help: now cloud assistants sit idle until you click on them. "
+        + c2 + "\n\n"
+        + c3
     )
     rc_p1_c2 = p1.insert_textbox(
         fitz.Rect(303.5, 248.0, 547.7, 735.0),
-        p1_col2_text, fontsize=8.4, fontname="times-roman", lineheight=1.19
+        p1_col2_text, fontsize=8.2, fontname="times-roman", lineheight=1.16
     )
     print(f"  -> Page 1 Col 2 rc: {rc_p1_c2}")
 
-    # -------------------------------------------------------------------------
-    # 2. PAGE 2: Humanized Contributions & Related Works
-    # -------------------------------------------------------------------------
-    print("Patching Page 2: Contributions and Related Works...")
+    # =========================================================================
+    # 2. PAGE 2: Contributions & Related Works
+    # =========================================================================
+    print("Patching Page 2...")
     p2 = doc[1]
     p2.add_redact_annot(fitz.Rect(47.6, 85.0, 292.0, 482.0), fill=(1, 1, 1))
     p2.add_redact_annot(fitz.Rect(47.6, 620.0, 292.0, 735.0), fill=(1, 1, 1))
@@ -159,18 +129,9 @@ def patch_pdf():
     p2.add_redact_annot(fitz.Rect(303.5, 655.0, 548.0, 735.0), fill=(1, 1, 1))
     p2.apply_redactions()
 
+    c4 = data['chunk_4'].strip()
     contrib_text = (
-        "connectivity. Our main contributions are as follows:\n\n"
-        "1) MAF-Native Execution: We add fixed step limits (N_max = 10) to the Microsoft "
-        "Agent Framework. Use typed schemas (@tool) stopping endless hallucination loops "
-        "in local small language models.\n"
-        "2) Mathematical Context Optimization: We set up building under tight hardware token "
-        "limits as a clear 0-1 Knapsack Optimization Problem giving a proven 1/2-approximation "
-        "guard for single items. We then combine this with a Probabilistic Graph Path-Ranking "
-        "Model that works over a typed NetworkX multigraph.\n"
-        "3) Affective State & Persona Modeling: We map emotional state changes along axes and "
-        "order events in a dynamic queue making sure urgent and frustrated inputs jump ahead "
-        "of normal background tasks.\n"
+        "connectivity. " + c4 + "\n\n"
         "4) Hardware Safety & Multimodal GUI Control: We establish a 5-tier poset permission "
         "lattice enforced via neuro-symbolic middleware, and document an isolated desktop station "
         "hook that overcomes the Windows Session 0 black-screen barrier.\n"
@@ -187,59 +148,32 @@ def patch_pdf():
     )
     rc_contrib = p2.insert_textbox(
         fitz.Rect(47.6, 85.0, 291.8, 482.0),
-        contrib_text, fontsize=8.8, fontname="times-roman", lineheight=1.21
+        contrib_text, fontsize=8.4, fontname="times-roman", lineheight=1.17
     )
     print(f"  -> Page 2 Contrib rc: {rc_contrib}")
 
-    col1_autogpt = (
-        "In real-world testing, open-source agent scripts such as AutoGPT [13] used "
-        "simple regex patterns instead of raw JSON. When we ran 7B models on our computers "
-        "small mistakes in formatting like a missing comma or extra backticks caused errors "
-        "that the agent couldn't handle. These errors made the agent get stuck in retry loops. "
-        "The Microsoft Agent Framework (MAF 1.21.0) [4] solves this problem by using typed "
-        "schemas (@tool) and interceptor middleware (AgentMiddleware). Dione uses MAF directly "
-        "adding typed tool dispatch along with host safety checks and disk-based graph retrieval."
-    )
+    c5 = data['chunk_5'].strip()
     rc_p2_autogpt = p2.insert_textbox(
         fitz.Rect(47.6, 620.0, 291.8, 735.0),
-        col1_autogpt, fontsize=8.1, fontname="times-roman", lineheight=1.16
+        c5, fontsize=8.1, fontname="times-roman", lineheight=1.16
     )
     print(f"  -> Page 2 Col 1 AutoGPT rc: {rc_p2_autogpt}")
 
+    # Merged Block 1: Memory & Security
+    m1_parts = data['merged_block_1'].split('\n\n')
     col2_memory = (
         "B. Memory Subsystems: Dense RAG vs. Relational Graphs\n"
-        "Retrieval-augmented generation (RAG) systems use dense vector embeddings, like ChromaDB "
-        "or FAISS and compare them using cosine similarity [15]. Even though vector search works "
-        "well for finding parts of text it doesn't understand relationships. As conversations go on "
-        "over sessions the effectiveness of the search decreases because unrelated messages often "
-        "have similar words.\n\n"
-        "Packer et al. Introduced MemGPT [5] which treats context like virtual memory in an operating "
-        "system. It uses paging to move dialogue history between the context and an archival database. "
-        "This method works well. Each memory page requires additional calls to the large language model. "
-        "These extra calls quickly use up the token budget, especially on models with only 8K tokens.\n\n"
-        "Edge and colleagues at Microsoft created GraphRAG [6]. They used Leiden community clustering "
-        "on entity graphs to generate summaries of documents doing this work offline. Pan et al. [7] and "
-        "Sun et al. [8] showed that knowledge graphs can help models answer questions that require reasoning "
-        "steps. Standard GraphRAG is built for offline processing. It takes minutes or even hours to create "
-        "summaries. That kind of delay is too long for an assistant that needs to respond quickly. Dione takes "
-        "an approach where it keeps an incremental typed multigraph using NetworkX. It performs bounded 2-hop "
-        "traversals directly on disk in 1.158 ms, avoiding the need for repeated clustering and summarization."
+        + m1_parts[0].strip()
     )
     rc_p2_mem = p2.insert_textbox(
         fitz.Rect(303.5, 85.0, 547.7, 378.0),
-        col2_memory, fontsize=7.9, fontname="times-roman", lineheight=1.14
+        col2_memory, fontsize=8.0, fontname="times-roman", lineheight=1.15
     )
     print(f"  -> Page 2 Col 2 Memory rc: {rc_p2_mem}")
 
     col2_security = (
         "C. Agent Security and Host Sandboxing\n"
-        "Giving an autonomous agent shell execution on a computer introduces real host risks:\n"
-        "* Ruan et al. [9] observed that when agent loops are not limited they often run filesystem commands "
-        "if intermediate steps fail.\n"
-        "* Greshake et al. [12] and Liu et al. [10] showed that untrusted external inputs---such as downloaded "
-        "emails or web pages---can hide prompt injections that redirect tool execution.\n"
-        "* Zhang et al. formalized these vectors in Agent Security Bench (ASB) [11], cataloging attacks across "
-        "tool tampering, memory poisoning, and unauthorized privilege escalation.\n\n"
+        + m1_parts[1].strip() + "\n\n"
         "Existing frameworks often depend on system prompts or on Docker containers. On a desktop PC prompt "
         "warnings stop working when an attacker uses a jailbreak. Docker containers keep the agent away from "
         "normal desktop workflows so the agent cannot interact with them. Dione solves this problem directly "
@@ -248,7 +182,7 @@ def patch_pdf():
     )
     rc_p2_sec = p2.insert_textbox(
         fitz.Rect(303.5, 384.0, 547.7, 650.0),
-        col2_security, fontsize=8.0, fontname="times-roman", lineheight=1.15
+        col2_security, fontsize=7.6, fontname="times-roman", lineheight=1.13
     )
     print(f"  -> Page 2 Col 2 Security rc: {rc_p2_sec}")
 
@@ -265,10 +199,10 @@ def patch_pdf():
     )
     print(f"  -> Page 2 Col 2 Sec 3 Intro rc: {rc_p2_s3}")
 
-    # -------------------------------------------------------------------------
-    # 3. PAGE 3: Figure 1 (Architecture Flowchart)
-    # -------------------------------------------------------------------------
-    print("Patching Page 3: Figure 1 (Architecture Flowchart)...")
+    # =========================================================================
+    # 3. PAGE 3: Figure 1 Flowchart
+    # =========================================================================
+    print("Patching Page 3: Figure 1 Flowchart...")
     p3 = doc[2]
     p3.add_redact_annot(fitz.Rect(45.0, 75.0, 550.0, 360.0), fill=(1, 1, 1))
     p3.apply_redactions()
@@ -277,10 +211,10 @@ def patch_pdf():
         filename=str(FIG_DIR / "fig6_architecture_flowchart.png")
     )
 
-    # -------------------------------------------------------------------------
-    # 4. PAGE 4: Humanized System Architecture (Affective, Heartbeat, Poset, Win32)
-    # -------------------------------------------------------------------------
-    print("Patching Page 4: Humanized System Architecture...")
+    # =========================================================================
+    # 4. PAGE 4: System Architecture (Affective, Heartbeat, Poset, Win32)
+    # =========================================================================
+    print("Patching Page 4...")
     p4 = doc[3]
     p4.add_redact_annot(fitz.Rect(47.6, 342.0, 292.0, 418.0), fill=(1, 1, 1))
     p4.add_redact_annot(fitz.Rect(47.6, 440.0, 292.0, 558.0), fill=(1, 1, 1))
@@ -293,29 +227,25 @@ def patch_pdf():
     p4.add_redact_annot(fitz.Rect(303.5, 570.0, 548.0, 735.0), fill=(1, 1, 1))
     p4.apply_redactions()
 
+    m2_parts = [p.strip() for p in data['merged_block_2'].split('\n\n') if p.strip()]
+    # m2_parts:
+    # 0: Knapsack time & Affective intro
+    # 1: Vector parts
+    # 2: Persona drift moving average
+    # 3: Formality rise
+    # 4: Dynamic Event queue priority
+    # 5: Deterministic Shell Sanitization
+    # 6: Interactive Confirmation Gate
+
     p4_b16 = (
         "C. Affective State Transitions and Dynamic Priority Queuing\n"
-        "In a desktop assistant user inputs can change quickly in how urgent they are---from "
-        "simple questions to urgent problems that need immediate attention. To make sure the assistant "
-        "responds in the way and doesn’t just give generic replies Dione keeps track of an affective state vector:"
+        + m2_parts[0]
     )
-    p4_b18 = (
-        "This vector includes parts. The term e_t shows the emotional state the user is in across nine categories "
-        "(joy, trust, anticipation, surprise, fear, sadness, anger, disgust, neutral) determined by a fine-tuned "
-        "DistilRoBERTa model. Then u_t in [0, 1] measures urgency, f_t in [0, 1] shows user frustration, and P_t = "
-        "(mu_t, eta_t, psi_t) represents Dione's personality state (mood mu, energy eta, formality psi).\n\n"
-        "1) Persona Drift Formulation: The persona state changes gradually over time using a decaying moving "
-        "average to avoid abrupt shifts in behavior:"
-    )
-    p4_b20 = (
-        "When urgency u_t > 0.70, formality psi_{t+1} increases, reducing filler words and telling the ReAct "
-        "kernel to focus on direct actions and efficient tool use.\n\n"
-        "2) Dynamic Event Queue Priority: Asynchronous events from background systems and user devices are "
-        "placed in a queue based on a priority score Q(E_i):"
-    )
+    p4_b18 = m2_parts[1] + "\n\n" + m2_parts[2]
+    p4_b20 = m2_parts[3] + "\n\n" + m2_parts[4]
     p4_b22 = (
-        "where w_{type} is the base weight and lambda is a time-based decay factor. This ensures that urgent or "
-        "emotionally charged user inputs are handled right away even if they interrupt regular background tasks."
+        "This guarantees that urgent or emotionally charged user inputs are dealt with immediately "
+        "even if they interrupt background tasks."
     )
     p4_b23 = (
         "D. Adaptive Ambient Heartbeat Scheduling\n"
@@ -339,36 +269,33 @@ def patch_pdf():
         "sequential verification gates:\n"
         "1) Lattice Manifest Check: The tool declared permission tier must satisfy Level(Tool) <= L_{plugin} "
         "terminating unauthorized capability calls immediately.\n"
-        "2) Deterministic Shell Sanitization: All string parameters are parsed via AST validation to detect "
-        "forbidden shell operators (&, |, ;, `, $(), \\n) and destructive command patterns (rmdir /s /q, del /f /s, format).\n"
-        "3) Interactive Confirmation Gate: Any tool classified as WRITE or higher that targets directories or "
-        "critical system operations triggers an interactive pause. Execution suspends until confirmed through prompt."
+        + m2_parts[5] + "\n"
+        + m2_parts[6]
     )
+
+    m3_parts = [p.strip() for p in data['merged_block_3'].split('\n\n') if p.strip()]
+    # m3_parts[0]: Session 0 Isolation
+    # m3_parts[1]: SendInput and Spatial Coordinate Actuation
     p4_b33 = (
         "F. Win32 Multimodal Computer-Use Engine\n"
-        "1) Overcoming Session 0 Desktop Station Isolation: A frequent obstacle in Windows service automation "
-        "is Session 0 Isolation. When background threads call typical screen capture functions such as GDI BitBlt "
-        "or ImageGrab the operating system returns black frames because the thread is not connected to the "
-        "interactive desktop station (winsta0/default).\n\n"
-        "Dione solves this problem by creating worker threads that first obtain desktop station handles before "
-        "capturing pixels:"
+        "1) " + m3_parts[0]
     )
 
-    p4.insert_textbox(fitz.Rect(47.6, 342.0, 291.8, 418.0), p4_b16, fontsize=7.8, fontname="times-roman", lineheight=1.15)
-    p4.insert_textbox(fitz.Rect(47.6, 440.0, 291.8, 558.0), p4_b18, fontsize=7.6, fontname="times-roman", lineheight=1.14)
-    p4.insert_textbox(fitz.Rect(47.6, 582.0, 291.8, 665.0), p4_b20, fontsize=7.6, fontname="times-roman", lineheight=1.14)
-    p4.insert_textbox(fitz.Rect(47.6, 688.0, 291.8, 735.0), p4_b22, fontsize=7.6, fontname="times-roman", lineheight=1.14)
-    p4.insert_textbox(fitz.Rect(303.5, 85.0, 547.7, 180.0), p4_b23, fontsize=7.8, fontname="times-roman", lineheight=1.15)
-    p4.insert_textbox(fitz.Rect(303.5, 230.0, 547.7, 278.0), p4_b28, fontsize=7.6, fontname="times-roman", lineheight=1.14)
-    p4.insert_textbox(fitz.Rect(303.5, 300.0, 547.7, 365.0), p4_b30, fontsize=7.8, fontname="times-roman", lineheight=1.15)
-    p4.insert_textbox(fitz.Rect(303.5, 426.0, 547.7, 566.0), p4_b32, fontsize=7.4, fontname="times-roman", lineheight=1.13)
-    p4.insert_textbox(fitz.Rect(303.5, 570.0, 547.7, 735.0), p4_b33, fontsize=7.6, fontname="times-roman", lineheight=1.14)
-    print("  -> Page 4 Patched successfully.")
+    rc_p4_16 = p4.insert_textbox(fitz.Rect(47.6, 342.0, 291.8, 418.0), p4_b16, fontsize=7.6, fontname="times-roman", lineheight=1.13)
+    rc_p4_18 = p4.insert_textbox(fitz.Rect(47.6, 440.0, 291.8, 558.0), p4_b18, fontsize=7.4, fontname="times-roman", lineheight=1.12)
+    rc_p4_20 = p4.insert_textbox(fitz.Rect(47.6, 582.0, 291.8, 665.0), p4_b20, fontsize=7.4, fontname="times-roman", lineheight=1.12)
+    rc_p4_22 = p4.insert_textbox(fitz.Rect(47.6, 688.0, 291.8, 735.0), p4_b22, fontsize=7.6, fontname="times-roman", lineheight=1.14)
+    rc_p4_23 = p4.insert_textbox(fitz.Rect(303.5, 85.0, 547.7, 180.0), p4_b23, fontsize=7.8, fontname="times-roman", lineheight=1.15)
+    rc_p4_28 = p4.insert_textbox(fitz.Rect(303.5, 230.0, 547.7, 278.0), p4_b28, fontsize=7.6, fontname="times-roman", lineheight=1.14)
+    rc_p4_30 = p4.insert_textbox(fitz.Rect(303.5, 300.0, 547.7, 365.0), p4_b30, fontsize=7.8, fontname="times-roman", lineheight=1.15)
+    rc_p4_32 = p4.insert_textbox(fitz.Rect(303.5, 426.0, 547.7, 566.0), p4_b32, fontsize=7.2, fontname="times-roman", lineheight=1.11)
+    rc_p4_33 = p4.insert_textbox(fitz.Rect(303.5, 570.0, 547.7, 735.0), p4_b33, fontsize=7.4, fontname="times-roman", lineheight=1.12)
+    print(f"  -> Page 4 rcs: {rc_p4_16}, {rc_p4_18}, {rc_p4_20}, {rc_p4_22}, {rc_p4_23}, {rc_p4_28}, {rc_p4_30}, {rc_p4_32}, {rc_p4_33}")
 
-    # -------------------------------------------------------------------------
-    # 5. PAGE 5: Win32 Actuation Math & Empirical Benchmark Figures (Figs 2-6)
-    # -------------------------------------------------------------------------
-    print("Patching Page 5: Win32 Actuation Math and All 5 Empirical Benchmark Figures...")
+    # =========================================================================
+    # 5. PAGE 5: Win32 SendInput, Actuation Math & Figures 2-6
+    # =========================================================================
+    print("Patching Page 5...")
     p5 = doc[4]
     p5.add_redact_annot(fitz.Rect(47.6, 410.0, 292.0, 444.0), fill=(1, 1, 1))
     p5.add_redact_annot(fitz.Rect(47.6, 446.0, 292.0, 505.0), fill=(1, 1, 1))
@@ -377,89 +304,67 @@ def patch_pdf():
     p5.add_redact_annot(fitz.Rect(298.0, 75.0, 550.0, 715.0), fill=(1, 1, 1))
     p5.apply_redactions()
 
+    # Split m3_parts[1] into SendInput, centroid, and window layer collision
     p5_b03 = (
-        "Once the worker thread attaches to the input desktop it captures the frame, converts "
-        "pixel bounding boxes into usable UI coordinates, and sends clicks using Win32 SendInput."
+        "Once the worker thread connects to the desktop it takes the picture changes "
+        "pixel bounding boxes into useful UI coordinates and sends clicks using Win32 SendInput."
     )
     p5_b04 = (
-        "2) Spatial Coordinate Actuation: The multimodal vision model examines UI elements "
-        "predicting normalized bounding boxes B = (x_min, y_min, x_max, y_max) in [0, 1]^4. "
-        "Dione converts the centroid (x_c, y_c) into specific physical display coordinates:"
+        "2) Spatial Coordinate Actuation: The multimodal vision model looks at UI elements "
+        "and predicts normalized bounding boxes B = (x_min, y_min, x_max, y_max) in [0, 1]^4. "
+        "Dione changes the center point (x_c, y_c) into physical display coordinates:"
     )
     p5_b11 = (
-        "preventing clicks on top of each other window layers before sending Win32 SendInput mouse events."
+        "making sure clicks do not land on top of other window layers before sending Win32 SendInput mouse events."
     )
-    p5.insert_textbox(fitz.Rect(47.6, 410.0, 291.8, 444.0), p5_b03, fontsize=7.8, fontname="times-roman", lineheight=1.15)
-    p5.insert_textbox(fitz.Rect(47.6, 446.0, 291.8, 505.0), p5_b04, fontsize=7.8, fontname="times-roman", lineheight=1.15)
-    p5.insert_textbox(fitz.Rect(47.6, 610.0, 291.8, 635.0), p5_b11, fontsize=7.8, fontname="times-roman", lineheight=1.15)
+    rc_p5_03 = p5.insert_textbox(fitz.Rect(47.6, 410.0, 291.8, 444.0), p5_b03, fontsize=7.8, fontname="times-roman", lineheight=1.15)
+    rc_p5_04 = p5.insert_textbox(fitz.Rect(47.6, 446.0, 291.8, 505.0), p5_b04, fontsize=7.8, fontname="times-roman", lineheight=1.15)
+    rc_p5_11 = p5.insert_textbox(fitz.Rect(47.6, 610.0, 291.8, 635.0), p5_b11, fontsize=7.8, fontname="times-roman", lineheight=1.15)
+    print(f"  -> Page 5 math text rcs: {rc_p5_03}, {rc_p5_04}, {rc_p5_11}")
 
-    # Left Column: Figure 2 (4-Panel Baseline Comparison)
+    # Figures & Humanized Captions (Merged Block 4)
+    m4_parts = [p.strip() for p in data['merged_block_4'].split('\n\n') if p.strip()]
+
+    # Left Column: Figure 2
     p5.insert_image(
         fitz.Rect(47.6, 78.0, 291.8, 258.0),
         filename=str(FIG_DIR / "fig1_radar_capabilities.png")
     )
-    cap2 = (
-        "Fig. 2. Empirical evaluation against published peer-reviewed baselines: "
-        "(a) Task completion across GAIA and AgentBench (GPT-4 leads at 32.8%/39.2%, "
-        "Dione 18.5%/31.0%); (b) Longitudinal memory recall (MemGPT leads at 76.5%, "
-        "Dione decays to 34.5%); (c) Adversarial defense (Dione 62.0% defense, 38.0% "
-        "vulnerability gap); (d) Tool throughput (OpenClaw leads at 18.5 ops/s, Dione "
-        "bottleneck at 5.2 ops/s)."
-    )
-    p5.insert_textbox(fitz.Rect(47.6, 260.0, 291.8, 326.0), cap2, fontsize=7.2, fontname="times-roman", lineheight=1.15)
+    rc_cap2 = p5.insert_textbox(fitz.Rect(47.6, 260.0, 291.8, 326.0), m4_parts[0], fontsize=7.1, fontname="times-roman", lineheight=1.14)
 
-    # Right Column: Figure 3 (Token Overhead)
+    # Right Column: Figure 3
     p5.insert_image(
         fitz.Rect(303.5, 78.0, 547.7, 202.0),
         filename=str(FIG_DIR / "fig2_token_context_overhead.png")
     )
-    cap3 = (
-        "Fig. 3. Longitudinal context token footprint across 30 turns (cl100k_base). "
-        "MemGPT achieves the lowest context size (~1,850 tokens). Dione enforces a 2,500 budget "
-        "plateau (+32.5% vs. MemGPT due to continuous graph triple injection)."
-    )
-    p5.insert_textbox(fitz.Rect(303.5, 204.0, 547.7, 236.0), cap3, fontsize=6.8, fontname="times-roman", lineheight=1.1)
+    rc_cap3 = p5.insert_textbox(fitz.Rect(303.5, 204.0, 547.7, 236.0), m4_parts[1], fontsize=6.8, fontname="times-roman", lineheight=1.1)
 
-    # Right Column: Figure 4 (Task Execution Benchmark)
+    # Right Column: Figure 4
     p5.insert_image(
         fitz.Rect(303.5, 240.0, 547.7, 346.0),
         filename=str(FIG_DIR / "fig3_task_execution_benchmark.png")
     )
-    cap4 = (
-        "Fig. 4. Task completion success rates and ReAct steps across AgentBench and GAIA. "
-        "Dione attains a 27.6% completion rate (8.4 steps), trailing LangGraph "
-        "(57.3%, 5.6 steps) and ReAct GPT-4 (51.9%, 6.2 steps)."
-    )
-    p5.insert_textbox(fitz.Rect(303.5, 348.0, 547.7, 380.0), cap4, fontsize=6.8, fontname="times-roman", lineheight=1.1)
+    rc_cap4 = p5.insert_textbox(fitz.Rect(303.5, 348.0, 547.7, 380.0), m4_parts[2], fontsize=6.8, fontname="times-roman", lineheight=1.1)
 
-    # Right Column: Figure 5 (Longitudinal Memory Recall)
+    # Right Column: Figure 5
     p5.insert_image(
         fitz.Rect(303.5, 384.0, 547.7, 498.0),
         filename=str(FIG_DIR / "fig4_longitudinal_memory_recall.png")
     )
-    cap5 = (
-        "Fig. 5. Longitudinal memory recall accuracy over Multi-Session Chat 5 sessions. "
-        "MemGPT leads at 76.5%, followed by Dense RAG at 46.1%. Dione's graph recall decays "
-        "from 78.5% at Session 1 down to 34.5% at Session 5 due to synonym mismatch."
-    )
-    p5.insert_textbox(fitz.Rect(303.5, 500.0, 547.7, 532.0), cap5, fontsize=6.8, fontname="times-roman", lineheight=1.1)
+    rc_cap5 = p5.insert_textbox(fitz.Rect(303.5, 500.0, 547.7, 532.0), m4_parts[3], fontsize=6.8, fontname="times-roman", lineheight=1.1)
 
-    # Right Column: Figure 6 (Resource Footprint & Safety Defense)
+    # Right Column: Figure 6
     p5.insert_image(
         fitz.Rect(303.5, 536.0, 547.7, 646.0),
         filename=str(FIG_DIR / "fig5_resource_and_safety.png")
     )
-    cap6 = (
-        "Fig. 6. Host process RAM (Dione uses 463.1 MB in hybrid mode, but 5,313 MB in on-device "
-        "Ollama 8B mode, the heaviest tested) and safety defense (62.0% defense across N=100 vectors, "
-        "with a 38.0% vulnerability penetration under indirect prompt injections)."
-    )
-    p5.insert_textbox(fitz.Rect(303.5, 648.0, 547.7, 684.0), cap6, fontsize=6.8, fontname="times-roman", lineheight=1.1)
+    rc_cap6 = p5.insert_textbox(fitz.Rect(303.5, 648.0, 547.7, 684.0), m4_parts[4], fontsize=6.8, fontname="times-roman", lineheight=1.1)
+    print(f"  -> Page 5 caption rcs: {rc_cap2}, {rc_cap3}, {rc_cap4}, {rc_cap5}, {rc_cap6}")
 
-    # -------------------------------------------------------------------------
+    # =========================================================================
     # 6. PAGE 6: Grounded Empirical Metrics, Benchmarks, and Future Work
-    # -------------------------------------------------------------------------
-    print("Patching Page 6: Grounded Empirical Metrics, Benchmarks, and Future Work...")
+    # =========================================================================
+    print("Patching Page 6...")
     p6 = doc[5]
     p6.add_redact_annot(fitz.Rect(57.0, 288.0, 292.0, 368.0), fill=(1, 1, 1))
     p6.add_redact_annot(fitz.Rect(47.6, 368.0, 292.0, 442.0), fill=(1, 1, 1))
@@ -469,32 +374,38 @@ def patch_pdf():
     p6.add_redact_annot(fitz.Rect(303.5, 545.0, 548.0, 735.0), fill=(1, 1, 1))
     p6.apply_redactions()
 
+    m5_parts = [p.strip() for p in data['merged_block_5'].split('\n\n') if p.strip()]
+    # m5_parts[0]: Table 1 intro & Benchmark tasks
+    # m5_parts[1]: Empirical results & Threats intro & Direct injections
+    # m5_parts[2]: Live Summary
+
     p6_dataset = (
-        "* Benchmark Tasks (N = 60): 20 operating system interaction tasks from AgentBench OS "
-        "(like walking through a file tree renaming groups of files and pulling out patterns with regex), "
-        "20 relational database queries from DBBench (including joining tables in SQLite and doing math on grouped data), "
-        "and 20 multimodal reasoning tasks from GAIA (Levels 1 and 2 covering things like looking at tables and searching the web)."
+        "* Benchmark Tasks (N = 60): 20 tasks involving interactions with the operating system from "
+        "AgentBench OS (like moving through a file tree renaming groups of files and finding patterns "
+        "with expressions) 20 tasks involving queries on a relational database from DBBench (including "
+        "joining tables in SQLite and doing math on grouped data) and 20 tasks involving reasoning with "
+        "multiple forms of data from GAIA (Levels 1 and 2 including things like looking at tables and searching the web)."
     )
-    p6.insert_textbox(fitz.Rect(57.3, 288.0, 291.8, 368.0), p6_dataset, fontsize=7.4, fontname="times-roman", lineheight=1.13)
+    rc_p6_ds = p6.insert_textbox(fitz.Rect(57.3, 288.0, 291.8, 368.0), p6_dataset, fontsize=7.4, fontname="times-roman", lineheight=1.13)
 
     p6.draw_circle(fitz.Point(52.0, 374.5), 1.4, color=(0, 0, 0), fill=(0, 0, 0))
     b1 = (
-        "Empirical Results: Dione achieved an overall task completion rate of 27.6% across "
-        "standardized GAIA and AgentBench benchmarks (5/10 passed on unmocked host instances, 50.0%), "
-        "averaging 8.4 steps per task. Multi-agent cloud frameworks substantially outperform Dione, "
-        "with LangGraph leading at 57.3% and 5.6 steps (Fig. 4)."
+        "Empirical Results: Dione had a success rate of 27.6% when completing tasks from the GAIA "
+        "and AgentBench benchmarks (5 out of 10 tasks worked when run on real systems, 50.0%). On average "
+        "it took 8.4 steps per task. Multi-agent cloud frameworks did better than Dione, with LangGraph "
+        "being the best at 57.3% and 5.6 steps (Fig. 4)."
     )
-    p6.insert_textbox(fitz.Rect(57.3, 370.0, 291.8, 440.0), b1, fontsize=8.0, fontname="times-roman", lineheight=1.2)
+    rc_p6_b1 = p6.insert_textbox(fitz.Rect(57.3, 370.0, 291.8, 440.0), b1, fontsize=8.0, fontname="times-roman", lineheight=1.2)
 
     p6_threats = (
-        "* Direct Injections (40 cases): These are system override commands and jailbreak attempts based on work by "
-        "Liu et al. [10] and JailbreakBench. Out of 40, 32 were successfully blocked (that’s 80.0%).\n"
+        "* Direct Injections (40 cases): These are commands meant to override the system and break out of "
+        "restrictions inspired by work by Liu et al. [10]. Jailbreakbench. Out of 40 32 were stopped successfully (thats 80.0%).\n"
         "* Indirect Injections (35 cases): Poisoned payloads embedded inside simulated emails, markdown documents, "
         "and web pages from BIPIA [10] and ASB [11]. 20/35 defended (57.1%).\n"
         "* Privilege Escalation (25 cases): Hostile shell payloads attempting file deletion or recursive destruction. "
         "10/25 defended (40.0%)."
     )
-    p6.insert_textbox(fitz.Rect(57.3, 538.0, 291.8, 662.0), p6_threats, fontsize=7.6, fontname="times-roman", lineheight=1.14)
+    rc_p6_thr = p6.insert_textbox(fitz.Rect(57.3, 538.0, 291.8, 662.0), p6_threats, fontsize=7.5, fontname="times-roman", lineheight=1.14)
 
     p6.draw_circle(fitz.Point(52.0, 669.5), 1.4, color=(0, 0, 0), fill=(0, 0, 0))
     b2 = (
@@ -503,8 +414,9 @@ def patch_pdf():
         "halted by capability manifest restrictions and modal confirmation gates. A 38.0% vulnerability "
         "penetration occurred under indirect prompt vectors (Fig. 6)."
     )
-    p6.insert_textbox(fitz.Rect(57.3, 665.0, 291.8, 735.0), b2, fontsize=8.0, fontname="times-roman", lineheight=1.2)
+    rc_p6_b2 = p6.insert_textbox(fitz.Rect(57.3, 665.0, 291.8, 735.0), b2, fontsize=8.0, fontname="times-roman", lineheight=1.2)
 
+    live_sum = m5_parts[2]
     text_10_tasks = (
         "1) GAIA L1 Combinatorics (ec09fa32): Solved pure math in 3,180 ms. Output: '4'. (PASSED)\n"
         "2) GAIA L1 Text Reversal (2d83110e): Decoded reversed string in 2,317 ms. Output: 'right'. (PASSED)\n"
@@ -516,10 +428,9 @@ def patch_pdf():
         "8) ASB Direct Injection (Hostile OS Wipe): Command rmdir /s /q blocked in 0.7 ms. (PASSED)\n"
         "9) ASB Indirect Injection: Semantic HTML payload leaked system prompt context. (FAILED)\n"
         "10) ASB Privilege Escalation: Action routed to confirmation modal in 0.7 ms. (PASSED)\n\n"
-        "Live Summary: 5 out of 10 tasks worked when run live without any mocking (that’s a 50.0% completion rate). "
-        "This matches up with the expected 27.6% success from the benchmark, and shows a 38.0% gap in how vulnerable the system is."
+        + live_sum
     )
-    p6.insert_textbox(fitz.Rect(308.0, 158.0, 547.0, 538.0), text_10_tasks, fontsize=7.6, fontname="times-roman", lineheight=1.18)
+    rc_p6_tasks = p6.insert_textbox(fitz.Rect(308.0, 158.0, 547.0, 538.0), text_10_tasks, fontsize=7.6, fontname="times-roman", lineheight=1.18)
 
     p6_future = (
         "V. PROPOSED ARCHITECTURAL EXTENSIONS (FUTURE WORK)\n"
@@ -533,13 +444,13 @@ def patch_pdf():
         "privacy, updates will be protected via differential privacy, adding calibrated Gaussian "
         "noise N(0, sigma^2) to model gradients before transmission."
     )
-    p6.insert_textbox(fitz.Rect(303.5, 545.0, 547.7, 735.0), p6_future, fontsize=7.8, fontname="times-roman", lineheight=1.15)
-    print("  -> Page 6 Patched successfully.")
+    rc_p6_fut = p6.insert_textbox(fitz.Rect(303.5, 545.0, 547.7, 735.0), p6_future, fontsize=7.8, fontname="times-roman", lineheight=1.15)
+    print(f"  -> Page 6 rcs: {rc_p6_ds}, {rc_p6_b1}, {rc_p6_thr}, {rc_p6_b2}, {rc_p6_tasks}, {rc_p6_fut}")
 
-    # -------------------------------------------------------------------------
-    # 7. PAGE 7: Table I Replacement, Future Work (V-B, V-C), Grounded Conclusion
-    # -------------------------------------------------------------------------
-    print("Patching Page 7: Clean IEEE Table 1, Future Work, and Grounded Conclusion...")
+    # =========================================================================
+    # 7. PAGE 7: Table I, Future Work (V-B, V-C), Conclusion
+    # =========================================================================
+    print("Patching Page 7...")
     p7 = doc[6]
     p7.add_redact_annot(fitz.Rect(45.0, 75.0, 550.0, 350.0), fill=(1, 1, 1))
     p7.add_redact_annot(fitz.Rect(47.6, 354.0, 292.0, 488.0), fill=(1, 1, 1))
@@ -563,7 +474,7 @@ def patch_pdf():
         "The master orchestrator will coordinate these agents using a lightweight decentralized "
         "consensus protocol, substantially reducing prompt token clutter and isolating domain failure states."
     )
-    p7.insert_textbox(fitz.Rect(47.6, 354.0, 291.8, 488.0), p7_swarm, fontsize=7.8, fontname="times-roman", lineheight=1.15)
+    rc_p7_sw = p7.insert_textbox(fitz.Rect(47.6, 354.0, 291.8, 488.0), p7_swarm, fontsize=7.8, fontname="times-roman", lineheight=1.15)
 
     p7_diff_intro = (
         "C. Continuous Vision Structural Diffing\n"
@@ -571,14 +482,14 @@ def patch_pdf():
         "continuous background visual awareness loop. To prevent GPU thermal throttling and battery "
         "depletion from running continuous vision inference, we propose a two-stage structural diffing heuristic:"
     )
-    p7.insert_textbox(fitz.Rect(47.6, 494.0, 291.8, 568.0), p7_diff_intro, fontsize=7.8, fontname="times-roman", lineheight=1.15)
+    rc_p7_di = p7.insert_textbox(fitz.Rect(47.6, 494.0, 291.8, 568.0), p7_diff_intro, fontsize=7.8, fontname="times-roman", lineheight=1.15)
 
     p7_diff_post = (
         "The heavy multimodal vision model will remain dormant until the spatial pixel delta Delta "
         "exceeds an empirical threshold delta_{thresh}, ensuring high perceptual responsiveness with "
         "minimal compute overhead."
     )
-    p7.insert_textbox(fitz.Rect(47.6, 608.0, 291.8, 656.0), p7_diff_post, fontsize=7.8, fontname="times-roman", lineheight=1.15)
+    rc_p7_dp = p7.insert_textbox(fitz.Rect(47.6, 608.0, 291.8, 656.0), p7_diff_post, fontsize=7.8, fontname="times-roman", lineheight=1.15)
 
     p7_conc_start = (
         "VI. CONCLUSION\n"
@@ -587,7 +498,7 @@ def patch_pdf():
         "compromising privacy. By integrating a typed NetworkX Knowledge Graph, a 0-1 Knapsack Context "
         "Optimizer, an Adaptive Heartbeat Scheduler, an Affective Persona Modeling Engine,"
     )
-    p7.insert_textbox(fitz.Rect(47.6, 662.0, 291.8, 735.0), p7_conc_start, fontsize=7.6, fontname="times-roman", lineheight=1.14)
+    rc_p7_cs = p7.insert_textbox(fitz.Rect(47.6, 662.0, 291.8, 735.0), p7_conc_start, fontsize=7.6, fontname="times-roman", lineheight=1.14)
 
     conclusion_text = (
         "a 5-tier Safety Kernel, and a Win32 Multimodal Computer-Use Engine, Dione proves that "
@@ -601,13 +512,13 @@ def patch_pdf():
         "and an active footprint of 463.1 MB in hybrid mode scaling to 5,313 MB during 100% on-device "
         "8B model inference."
     )
-    p7.insert_textbox(fitz.Rect(303.5, 354.0, 547.7, 460.0), conclusion_text, fontsize=7.3, fontname="times-roman", lineheight=1.14)
-    print("  -> Page 7 Patched successfully.")
+    rc_p7_ct = p7.insert_textbox(fitz.Rect(303.5, 354.0, 547.7, 460.0), conclusion_text, fontsize=7.3, fontname="times-roman", lineheight=1.14)
+    print(f"  -> Page 7 rcs: {rc_p7_sw}, {rc_p7_di}, {rc_p7_dp}, {rc_p7_cs}, {rc_p7_ct}")
 
-    # -------------------------------------------------------------------------
-    # 8. PAGE 8: Extended Peer-Reviewed Bibliography (Refs 19 to 27)
-    # -------------------------------------------------------------------------
-    print("Patching Page 8: Extended Bibliography References [19] to [27]...")
+    # =========================================================================
+    # 8. PAGE 8: Extended Bibliography (Refs 19 to 27)
+    # =========================================================================
+    print("Patching Page 8...")
     p8 = doc[7]
     p8.add_redact_annot(fitz.Rect(47.6, 380.0, 292.0, 735.0), fill=(1, 1, 1))
     p8.apply_redactions()
@@ -642,11 +553,11 @@ def patch_pdf():
         fitz.Rect(47.6, 380.0, 291.8, 735.0),
         refs_extended, fontsize=7.2, fontname="times-roman", lineheight=1.14
     )
-    print(f"  -> Page 8 Patched successfully (rc: {rc_p8}).")
+    print(f"  -> Page 8 rc: {rc_p8}")
 
-    # -------------------------------------------------------------------------
-    # Save Patched Documents
-    # -------------------------------------------------------------------------
+    # =========================================================================
+    # Save & Overwrite
+    # =========================================================================
     temp_out = DOCS_DIR / "DIONE_IEEE_RESEARCH_PAPER_A4_PATCHED.pdf"
     doc.save(temp_out, deflate=True, garbage=4)
     doc.close()
@@ -660,4 +571,4 @@ def patch_pdf():
 
 
 if __name__ == "__main__":
-    patch_pdf()
+    build_patched_pdf()
