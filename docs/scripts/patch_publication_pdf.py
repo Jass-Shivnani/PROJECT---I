@@ -215,16 +215,39 @@ def patch_pdf():
     print(f"  -> Page 2 Col 2 Sec 3 Intro rc: {rc_p2_s3}")
 
     # =========================================================================
-    # 3. PAGE 3: Figure 1 Architecture Flowchart
+    # 3. PAGE 3: Figure 1 Architecture Flowchart & Clean Column 1/2 Equations
     # =========================================================================
-    print("Patching Page 3: Figure 1 Flowchart...")
+    print("Patching Page 3: Figure 1 Flowchart and Column Junction...")
     p3 = doc[2]
     p3.add_redact_annot(fitz.Rect(45.0, 75.0, 550.0, 360.0), fill=(1, 1, 1))
+    # Wipe the overflowing equation and text in Column 1 and the colliding heading in Column 2:
+    p3.add_redact_annot(fitz.Rect(47.6, 492.0, 292.0, 563.0), fill=(1, 1, 1))
+    p3.add_redact_annot(fitz.Rect(295.0, 508.0, 548.0, 525.0), fill=(1, 1, 1))
     p3.apply_redactions()
+
     p3.insert_image(
         fitz.Rect(47.6, 78.0, 547.7, 358.0),
         filename=str(FIG_DIR / "fig6_architecture_flowchart.png")
     )
+
+    col1_eq_text = (
+        "V = {v_i | v_i = (id, tau, name, M)},   tau in T        (1)\n"
+        "where T = {Person, Event, Document, Task, Preference,\n"
+        "Organization}. Edges e = (u, v, r, w, t) in E define relationships\n"
+        "of type r in R with confidence weight w in [0, 1] and\n"
+        "last-accessed timestamp t."
+    )
+    rc_p3_eq = p3.insert_textbox(
+        fitz.Rect(47.6, 493.0, 291.8, 562.0),
+        col1_eq_text, fontsize=7.6, fontname="times-roman", lineheight=1.14
+    )
+
+    col2_heading = "B. Token Allocation as a 0-1 Knapsack Optimization Problem"
+    rc_p3_h2 = p3.insert_textbox(
+        fitz.Rect(303.5, 510.0, 547.7, 524.0),
+        col2_heading, fontsize=8.6, fontname="times-italic", lineheight=1.1
+    )
+    print(f"  -> Page 3 clean eq rc: {rc_p3_eq}, clean heading rc: {rc_p3_h2}")
 
     # =========================================================================
     # 4. PAGE 4: System Architecture (Affective, Heartbeat, Poset, Win32)
@@ -238,6 +261,7 @@ def patch_pdf():
     p4.add_redact_annot(fitz.Rect(303.5, 85.0, 548.0, 180.0), fill=(1, 1, 1))
     p4.add_redact_annot(fitz.Rect(303.5, 230.0, 548.0, 278.0), fill=(1, 1, 1))
     p4.add_redact_annot(fitz.Rect(303.5, 300.0, 548.0, 365.0), fill=(1, 1, 1))
+    p4.add_redact_annot(fitz.Rect(303.5, 360.0, 600.0, 395.0), fill=(1, 1, 1))
     p4.add_redact_annot(fitz.Rect(303.5, 426.0, 548.0, 566.0), fill=(1, 1, 1))
     p4.add_redact_annot(fitz.Rect(303.5, 570.0, 548.0, 735.0), fill=(1, 1, 1))
     p4.apply_redactions()
@@ -306,9 +330,14 @@ def patch_pdf():
     rc_p4_23 = p4.insert_textbox(fitz.Rect(303.5, 85.0, 547.7, 180.0), p4_b23, fontsize=7.8, fontname="times-roman", lineheight=1.15)
     rc_p4_28 = p4.insert_textbox(fitz.Rect(303.5, 230.0, 547.7, 278.0), p4_b28, fontsize=7.6, fontname="times-roman", lineheight=1.14)
     rc_p4_30 = p4.insert_textbox(fitz.Rect(303.5, 300.0, 547.7, 365.0), p4_b30, fontsize=7.8, fontname="times-roman", lineheight=1.15)
+    eq13_text = (
+        "L = (P, <=),   P = {NONE < READ < WRITE <\n"
+        "EXECUTE < FULL}                                                 (13)"
+    )
+    rc_p4_eq13 = p4.insert_textbox(fitz.Rect(303.5, 365.0, 547.7, 395.0), eq13_text, fontsize=7.6, fontname="times-roman", lineheight=1.14)
     rc_p4_32 = p4.insert_textbox(fitz.Rect(303.5, 426.0, 547.7, 566.0), p4_b32, fontsize=7.2, fontname="times-roman", lineheight=1.11)
     rc_p4_33 = p4.insert_textbox(fitz.Rect(303.5, 570.0, 547.7, 735.0), p4_b33, fontsize=7.3, fontname="times-roman", lineheight=1.11)
-    print(f"  -> Page 4 rcs: {rc_p4_16}, {rc_p4_18}, {rc_p4_20}, {rc_p4_22}, {rc_p4_23}, {rc_p4_28}, {rc_p4_30}, {rc_p4_32}, {rc_p4_33}")
+    print(f"  -> Page 4 rcs: {rc_p4_16}, {rc_p4_18}, {rc_p4_20}, {rc_p4_22}, {rc_p4_23}, {rc_p4_28}, {rc_p4_30}, {rc_p4_eq13}, {rc_p4_32}, {rc_p4_33}")
 
     # =========================================================================
     # 5. PAGE 5: Win32 Actuation Math & Figures 2-6
