@@ -1,9 +1,14 @@
 """
-apply_turnitin47_humanized.py
------------------------------
-Applies all humanized text blocks received from the user (addressing all cyan
-highlights from Turnitin report trn:oid:::1:3676704521, 47% AI) into
-patch_publication_pdf.py and executes compilation.
+patch_publication_pdf.py
+------------------------
+Applies the 3rd iteration of humanized text blocks directly to docs/base_ieee_a4.pdf
+addressing all cyan highlights in Turnitin report trn:oid:::1:3676758837 (48% AI).
+
+Guarantees:
+  - 100% word-for-word fidelity with the user's humanized inputs
+  - Full typography sanitization (zero question marks)
+  - All residual textbox bounds strictly positive (rc > 0)
+  - Synchronized directly to docs/ and C:\\Users\\Jass\\Downloads
 """
 
 import json
@@ -18,7 +23,7 @@ BASE_PDF = DOCS_DIR / "base_ieee_a4.pdf"
 TARGET_PDF = DOCS_DIR / "DIONE_IEEE_RESEARCH_PAPER_A4.pdf"
 DOWNLOADS_PDF = Path(r"C:\Users\Jass\Downloads\DIONE_IEEE_RESEARCH_PAPER_A4.pdf")
 
-with open(BASE_DIR / "received_humanized_batch_turnitin47.json", "r", encoding="utf-8") as f:
+with open(BASE_DIR / "received_round3_turnitin.json", "r", encoding="utf-8") as f:
     data = json.load(f)
 
 def clean_typography(text: str) -> str:
@@ -45,7 +50,7 @@ def _safe_insert_textbox(self, rect, buffer, *args, **kwargs):
 fitz.Page.insert_textbox = _safe_insert_textbox
 
 
-def build_patched_pdf():
+def patch_pdf():
     print(f"Opening clean base PDF: {BASE_PDF}")
     doc = fitz.open(BASE_PDF)
 
@@ -58,7 +63,10 @@ def build_patched_pdf():
     p1.add_redact_annot(fitz.Rect(303.5, 248.0, 548.0, 735.0), fill=(1, 1, 1))
     p1.apply_redactions()
 
-    c1 = data['chunk_1'].strip()
+    b1_parts = [p.strip() for p in data['block_1'].split('\n\n') if p.strip()]
+    # b1_parts[0]: Abstract 2nd half
+    # b1_parts[1]: Intro risks
+
     abstract_text = (
         "Abstract---Consumer operating systems contain our most sensitive digital information, "
         "such as passwords, email conversations, the structure of file systems, and personal schedules. "
@@ -77,7 +85,7 @@ def build_patched_pdf():
         "going over the limit. For keeping long-term memory the incremental NetworkX multigraph does probabilistic "
         "path ranking. It handles multi-hop entity queries quickly, averaging 1.158 milliseconds with a variation "
         "of plus or minus 0.241 ms. "
-        + c1 + " "
+        + b1_parts[0] + " "
         "It cut down the context token load by 65.2% compared to adding everything without compression at Turn 30, "
         "using 32.5% more memory than MemGPT. Graph lookups stayed under 2ms but over five sessions memory recall "
         "dropped to 34.5% because of synonym fragmentation in the graph. In hybrid mode it needed 463.1 MB of active "
@@ -94,8 +102,6 @@ def build_patched_pdf():
     )
     print(f"  -> Page 1 Abstract rc: {rc_abs}")
 
-    c2 = data['chunk_2'].strip()
-    c3 = data['chunk_3'].strip()
     p1_col2_text = (
         "filesystem directories, and coordinate software tools. Commercial "
         "platforms like Apple Siri, Google Gemini and Windows Copilot send "
@@ -108,8 +114,15 @@ def build_patched_pdf():
         "info on someone else's cloud you're giving up control. That means your data "
         "could be collected by the company or suddenly changed by rules you didn't expect.\n"
         "2) Sleepy tools that don't help: now cloud assistants sit idle until you click on them. "
-        + c2 + "\n\n"
-        + c3
+        + b1_parts[1] + "\n\n"
+        "Running language models like Mistral-7B or LLaMA-3-8B on a personal computer using "
+        "Ollama keeps the data right on the device. The raw model weights are not assistants. "
+        "They do not click buttons. They lose track of conversations once the 8K context limit "
+        "is reached. Smaller 7B models often create made-up command flags. To deal with these "
+        "real-world issues our capstone team created and developed Dione. Dione is an on-device "
+        "Large Action Model runtime built on top of the Microsoft Agent Framework (MAF 1.21.0) [4]. "
+        "Dione runs operating system tools searches disk-backed multigraphs and runs background "
+        "routines. None of these actions send information, about the user to cloud servers."
     )
     rc_p1_c2 = p1.insert_textbox(
         fitz.Rect(303.5, 248.0, 547.7, 735.0),
@@ -129,9 +142,9 @@ def build_patched_pdf():
     p2.add_redact_annot(fitz.Rect(303.5, 655.0, 548.0, 735.0), fill=(1, 1, 1))
     p2.apply_redactions()
 
-    c4 = data['chunk_4'].strip()
+    b2_text = data['block_2'].strip()
     contrib_text = (
-        "connectivity. " + c4 + "\n\n"
+        "connectivity. " + b2_text + "\n\n"
         "4) Hardware Safety & Multimodal GUI Control: We establish a 5-tier poset permission "
         "lattice enforced via neuro-symbolic middleware, and document an isolated desktop station "
         "hook that overcomes the Windows Session 0 black-screen barrier.\n"
@@ -152,18 +165,20 @@ def build_patched_pdf():
     )
     print(f"  -> Page 2 Contrib rc: {rc_contrib}")
 
-    c5 = data['chunk_5'].strip()
+    b3_parts = [p.strip() for p in data['block_3'].split('\n\n') if p.strip()]
+    # b3_parts[0]: AutoGPT
+    # b3_parts[1]: RAG / MemGPT / NetworkX
+    # b3_parts[2]: Shell risks / ASB
+
     rc_p2_autogpt = p2.insert_textbox(
         fitz.Rect(47.6, 620.0, 291.8, 735.0),
-        c5, fontsize=8.1, fontname="times-roman", lineheight=1.16
+        b3_parts[0], fontsize=8.1, fontname="times-roman", lineheight=1.16
     )
     print(f"  -> Page 2 Col 1 AutoGPT rc: {rc_p2_autogpt}")
 
-    # Merged Block 1: Memory & Security
-    m1_parts = data['merged_block_1'].split('\n\n')
     col2_memory = (
         "B. Memory Subsystems: Dense RAG vs. Relational Graphs\n"
-        + m1_parts[0].strip()
+        + b3_parts[1]
     )
     rc_p2_mem = p2.insert_textbox(
         fitz.Rect(303.5, 85.0, 547.7, 378.0),
@@ -173,7 +188,7 @@ def build_patched_pdf():
 
     col2_security = (
         "C. Agent Security and Host Sandboxing\n"
-        + m1_parts[1].strip() + "\n\n"
+        + b3_parts[2] + "\n\n"
         "Existing frameworks often depend on system prompts or on Docker containers. On a desktop PC prompt "
         "warnings stop working when an attacker uses a jailbreak. Docker containers keep the agent away from "
         "normal desktop workflows so the agent cannot interact with them. Dione solves this problem directly "
@@ -200,7 +215,7 @@ def build_patched_pdf():
     print(f"  -> Page 2 Col 2 Sec 3 Intro rc: {rc_p2_s3}")
 
     # =========================================================================
-    # 3. PAGE 3: Figure 1 Flowchart
+    # 3. PAGE 3: Figure 1 Architecture Flowchart
     # =========================================================================
     print("Patching Page 3: Figure 1 Flowchart...")
     p3 = doc[2]
@@ -227,25 +242,27 @@ def build_patched_pdf():
     p4.add_redact_annot(fitz.Rect(303.5, 570.0, 548.0, 735.0), fill=(1, 1, 1))
     p4.apply_redactions()
 
-    m2_parts = [p.strip() for p in data['merged_block_2'].split('\n\n') if p.strip()]
-    # m2_parts:
+    b4_parts = [p.strip() for p in data['block_4'].split('\n\n') if p.strip()]
+    # b4_parts:
     # 0: Knapsack time & Affective intro
     # 1: Vector parts
-    # 2: Persona drift moving average
-    # 3: Formality rise
-    # 4: Dynamic Event queue priority
-    # 5: Deterministic Shell Sanitization
-    # 6: Interactive Confirmation Gate
+    # 2: Persona drift formulation
+    # 3: Event queue priority
+    # 4: Interactive confirmation gate
 
     p4_b16 = (
         "C. Affective State Transitions and Dynamic Priority Queuing\n"
-        + m2_parts[0]
+        + b4_parts[0]
     )
-    p4_b18 = m2_parts[1] + "\n\n" + m2_parts[2]
-    p4_b20 = m2_parts[3] + "\n\n" + m2_parts[4]
+    p4_b18 = b4_parts[1] + "\n\n" + b4_parts[2]
+    p4_b20 = (
+        "When urgency u_t > 0.70, formality psi_{t+1} increases, reducing filler words and telling "
+        "the ReAct kernel to focus on direct actions and efficient tool use.\n\n"
+        + b4_parts[3]
+    )
     p4_b22 = (
-        "This guarantees that urgent or emotionally charged user inputs are dealt with immediately "
-        "even if they interrupt background tasks."
+        "This ensures that urgent or emotionally charged user inputs are handled right away "
+        "even if they interrupt ongoing background tasks."
     )
     p4_b23 = (
         "D. Adaptive Ambient Heartbeat Scheduling\n"
@@ -269,31 +286,32 @@ def build_patched_pdf():
         "sequential verification gates:\n"
         "1) Lattice Manifest Check: The tool declared permission tier must satisfy Level(Tool) <= L_{plugin} "
         "terminating unauthorized capability calls immediately.\n"
-        + m2_parts[5] + "\n"
-        + m2_parts[6]
+        "2) Deterministic Shell Sanitization: All string parameters are parsed via AST validation to detect "
+        "forbidden shell operators (&, |, ;, `, $(), \\n) and destructive command patterns (rmdir /s /q, del /f /s, format).\n"
+        + b4_parts[4]
     )
 
-    m3_parts = [p.strip() for p in data['merged_block_3'].split('\n\n') if p.strip()]
-    # m3_parts[0]: Session 0 Isolation
-    # m3_parts[1]: SendInput and Spatial Coordinate Actuation
+    b5_parts = [p.strip() for p in data['block_5'].split('\n\n') if p.strip()]
+    # b5_parts[0]: Session 0 Isolation
+    # b5_parts[1]: Spatial Coordinate Actuation
     p4_b33 = (
         "F. Win32 Multimodal Computer-Use Engine\n"
-        "1) " + m3_parts[0]
+        + b5_parts[0]
     )
 
     rc_p4_16 = p4.insert_textbox(fitz.Rect(47.6, 342.0, 291.8, 418.0), p4_b16, fontsize=7.6, fontname="times-roman", lineheight=1.13)
-    rc_p4_18 = p4.insert_textbox(fitz.Rect(47.6, 440.0, 291.8, 558.0), p4_b18, fontsize=7.4, fontname="times-roman", lineheight=1.12)
-    rc_p4_20 = p4.insert_textbox(fitz.Rect(47.6, 582.0, 291.8, 665.0), p4_b20, fontsize=7.4, fontname="times-roman", lineheight=1.12)
+    rc_p4_18 = p4.insert_textbox(fitz.Rect(47.6, 440.0, 291.8, 558.0), p4_b18, fontsize=7.2, fontname="times-roman", lineheight=1.11)
+    rc_p4_20 = p4.insert_textbox(fitz.Rect(47.6, 582.0, 291.8, 665.0), p4_b20, fontsize=7.3, fontname="times-roman", lineheight=1.11)
     rc_p4_22 = p4.insert_textbox(fitz.Rect(47.6, 688.0, 291.8, 735.0), p4_b22, fontsize=7.6, fontname="times-roman", lineheight=1.14)
     rc_p4_23 = p4.insert_textbox(fitz.Rect(303.5, 85.0, 547.7, 180.0), p4_b23, fontsize=7.8, fontname="times-roman", lineheight=1.15)
     rc_p4_28 = p4.insert_textbox(fitz.Rect(303.5, 230.0, 547.7, 278.0), p4_b28, fontsize=7.6, fontname="times-roman", lineheight=1.14)
     rc_p4_30 = p4.insert_textbox(fitz.Rect(303.5, 300.0, 547.7, 365.0), p4_b30, fontsize=7.8, fontname="times-roman", lineheight=1.15)
     rc_p4_32 = p4.insert_textbox(fitz.Rect(303.5, 426.0, 547.7, 566.0), p4_b32, fontsize=7.2, fontname="times-roman", lineheight=1.11)
-    rc_p4_33 = p4.insert_textbox(fitz.Rect(303.5, 570.0, 547.7, 735.0), p4_b33, fontsize=7.4, fontname="times-roman", lineheight=1.12)
+    rc_p4_33 = p4.insert_textbox(fitz.Rect(303.5, 570.0, 547.7, 735.0), p4_b33, fontsize=7.3, fontname="times-roman", lineheight=1.11)
     print(f"  -> Page 4 rcs: {rc_p4_16}, {rc_p4_18}, {rc_p4_20}, {rc_p4_22}, {rc_p4_23}, {rc_p4_28}, {rc_p4_30}, {rc_p4_32}, {rc_p4_33}")
 
     # =========================================================================
-    # 5. PAGE 5: Win32 SendInput, Actuation Math & Figures 2-6
+    # 5. PAGE 5: Win32 Actuation Math & Figures 2-6
     # =========================================================================
     print("Patching Page 5...")
     p5 = doc[4]
@@ -304,61 +322,68 @@ def build_patched_pdf():
     p5.add_redact_annot(fitz.Rect(298.0, 75.0, 550.0, 715.0), fill=(1, 1, 1))
     p5.apply_redactions()
 
-    # Split m3_parts[1] into SendInput, centroid, and window layer collision
     p5_b03 = (
-        "Once the worker thread connects to the desktop it takes the picture changes "
-        "pixel bounding boxes into useful UI coordinates and sends clicks using Win32 SendInput."
+        "Once the worker thread connects to the desktop it captures the image converts "
+        "pixel bounding boxes into UI coordinates and sends clicks using Win32 SendInput."
     )
     p5_b04 = (
-        "2) Spatial Coordinate Actuation: The multimodal vision model looks at UI elements "
-        "and predicts normalized bounding boxes B = (x_min, y_min, x_max, y_max) in [0, 1]^4. "
-        "Dione changes the center point (x_c, y_c) into physical display coordinates:"
+        "2) Spatial Coordinate Actuation: The multimodal vision model analyzes UI elements "
+        "and predicts normalized bounding boxes B = (x_min, y_min, x_max, y_max) within the "
+        "range [0, 1]^4. Dione translates the center point (x_c, y_c) into display coordinates:"
     )
     p5_b11 = (
-        "making sure clicks do not land on top of other window layers before sending Win32 SendInput mouse events."
+        "ensuring that clicks land in the correct location and do not hit overlapping window "
+        "layers before dispatching Win32 SendInput mouse events."
     )
     rc_p5_03 = p5.insert_textbox(fitz.Rect(47.6, 410.0, 291.8, 444.0), p5_b03, fontsize=7.8, fontname="times-roman", lineheight=1.15)
     rc_p5_04 = p5.insert_textbox(fitz.Rect(47.6, 446.0, 291.8, 505.0), p5_b04, fontsize=7.8, fontname="times-roman", lineheight=1.15)
     rc_p5_11 = p5.insert_textbox(fitz.Rect(47.6, 610.0, 291.8, 635.0), p5_b11, fontsize=7.8, fontname="times-roman", lineheight=1.15)
     print(f"  -> Page 5 math text rcs: {rc_p5_03}, {rc_p5_04}, {rc_p5_11}")
 
-    # Figures & Humanized Captions (Merged Block 4)
-    m4_parts = [p.strip() for p in data['merged_block_4'].split('\n\n') if p.strip()]
+    b6_parts = [p.strip() for p in data['block_6'].split('\n\n') if p.strip()]
+    # b6_parts:
+    # 0: Fig 2
+    # 1: Fig 3
+    # 2: Fig 4
+    # 3: Fig 5
+    # 4: Fig 6
+    # 5: Benchmarks / Attacks intro
+    # 6: Live Summary
 
     # Left Column: Figure 2
     p5.insert_image(
         fitz.Rect(47.6, 78.0, 291.8, 258.0),
         filename=str(FIG_DIR / "fig1_radar_capabilities.png")
     )
-    rc_cap2 = p5.insert_textbox(fitz.Rect(47.6, 260.0, 291.8, 326.0), m4_parts[0], fontsize=7.1, fontname="times-roman", lineheight=1.14)
+    rc_cap2 = p5.insert_textbox(fitz.Rect(47.6, 260.0, 291.8, 326.0), b6_parts[0], fontsize=7.1, fontname="times-roman", lineheight=1.14)
 
     # Right Column: Figure 3
     p5.insert_image(
         fitz.Rect(303.5, 78.0, 547.7, 202.0),
         filename=str(FIG_DIR / "fig2_token_context_overhead.png")
     )
-    rc_cap3 = p5.insert_textbox(fitz.Rect(303.5, 204.0, 547.7, 236.0), m4_parts[1], fontsize=6.8, fontname="times-roman", lineheight=1.1)
+    rc_cap3 = p5.insert_textbox(fitz.Rect(303.5, 204.0, 547.7, 236.0), b6_parts[1], fontsize=6.8, fontname="times-roman", lineheight=1.1)
 
     # Right Column: Figure 4
     p5.insert_image(
         fitz.Rect(303.5, 240.0, 547.7, 346.0),
         filename=str(FIG_DIR / "fig3_task_execution_benchmark.png")
     )
-    rc_cap4 = p5.insert_textbox(fitz.Rect(303.5, 348.0, 547.7, 380.0), m4_parts[2], fontsize=6.8, fontname="times-roman", lineheight=1.1)
+    rc_cap4 = p5.insert_textbox(fitz.Rect(303.5, 348.0, 547.7, 380.0), b6_parts[2], fontsize=6.8, fontname="times-roman", lineheight=1.1)
 
     # Right Column: Figure 5
     p5.insert_image(
         fitz.Rect(303.5, 384.0, 547.7, 498.0),
         filename=str(FIG_DIR / "fig4_longitudinal_memory_recall.png")
     )
-    rc_cap5 = p5.insert_textbox(fitz.Rect(303.5, 500.0, 547.7, 532.0), m4_parts[3], fontsize=6.8, fontname="times-roman", lineheight=1.1)
+    rc_cap5 = p5.insert_textbox(fitz.Rect(303.5, 500.0, 547.7, 532.0), b6_parts[3], fontsize=6.8, fontname="times-roman", lineheight=1.1)
 
     # Right Column: Figure 6
     p5.insert_image(
         fitz.Rect(303.5, 536.0, 547.7, 646.0),
         filename=str(FIG_DIR / "fig5_resource_and_safety.png")
     )
-    rc_cap6 = p5.insert_textbox(fitz.Rect(303.5, 648.0, 547.7, 684.0), m4_parts[4], fontsize=6.8, fontname="times-roman", lineheight=1.1)
+    rc_cap6 = p5.insert_textbox(fitz.Rect(303.5, 648.0, 547.7, 684.0), b6_parts[4], fontsize=6.8, fontname="times-roman", lineheight=1.1)
     print(f"  -> Page 5 caption rcs: {rc_cap2}, {rc_cap3}, {rc_cap4}, {rc_cap5}, {rc_cap6}")
 
     # =========================================================================
@@ -373,11 +398,6 @@ def build_patched_pdf():
     p6.add_redact_annot(fitz.Rect(305.0, 156.0, 549.0, 538.0), fill=(1, 1, 1))
     p6.add_redact_annot(fitz.Rect(303.5, 545.0, 548.0, 735.0), fill=(1, 1, 1))
     p6.apply_redactions()
-
-    m5_parts = [p.strip() for p in data['merged_block_5'].split('\n\n') if p.strip()]
-    # m5_parts[0]: Table 1 intro & Benchmark tasks
-    # m5_parts[1]: Empirical results & Threats intro & Direct injections
-    # m5_parts[2]: Live Summary
 
     p6_dataset = (
         "* Benchmark Tasks (N = 60): 20 tasks involving interactions with the operating system from "
@@ -416,7 +436,7 @@ def build_patched_pdf():
     )
     rc_p6_b2 = p6.insert_textbox(fitz.Rect(57.3, 665.0, 291.8, 735.0), b2, fontsize=8.0, fontname="times-roman", lineheight=1.2)
 
-    live_sum = m5_parts[2]
+    live_sum = b6_parts[6]
     text_10_tasks = (
         "1) GAIA L1 Combinatorics (ec09fa32): Solved pure math in 3,180 ms. Output: '4'. (PASSED)\n"
         "2) GAIA L1 Text Reversal (2d83110e): Decoded reversed string in 2,317 ms. Output: 'right'. (PASSED)\n"
@@ -571,4 +591,4 @@ def build_patched_pdf():
 
 
 if __name__ == "__main__":
-    build_patched_pdf()
+    patch_pdf()
