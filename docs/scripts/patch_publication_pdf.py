@@ -26,24 +26,32 @@ import fitz
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DOCS_DIR = BASE_DIR / "docs"
 FIG_DIR = DOCS_DIR / "figures"
+BASE_PDF = DOCS_DIR / "base_ieee_a4.pdf"
 TARGET_PDF = DOCS_DIR / "DIONE_IEEE_RESEARCH_PAPER_A4.pdf"
 DOWNLOADS_PDF = Path(r"C:\Users\Jass\Downloads\DIONE_IEEE_RESEARCH_PAPER_A4.pdf")
 
 
 def patch_pdf():
-    print(f"Opening target PDF: {TARGET_PDF}")
-    doc = fitz.open(TARGET_PDF)
+    # If base_ieee_a4.pdf does not exist, cache it from git
+    if not BASE_PDF.exists():
+        import subprocess
+        raw = subprocess.check_output(['git', 'show', 'ff65e22:docs/DIONE_IEEE_RESEARCH_PAPER_A4.pdf'])
+        BASE_PDF.write_bytes(raw)
+        print(f"Cached pristine base PDF: {BASE_PDF}")
+
+    print(f"Opening clean base PDF: {BASE_PDF}")
+    doc = fitz.open(BASE_PDF)
 
     # -------------------------------------------------------------------------
-    # 1. PAGE 1: Grounded Abstract
+    # 1. PAGE 1: Grounded Abstract & IEEE Index Terms (Keywords)
     # -------------------------------------------------------------------------
-    print("Patching Page 1: Abstract...")
+    print("Patching Page 1: Abstract & Index Terms...")
     p1 = doc[0]
     p1.add_redact_annot(fitz.Rect(47.6, 249.0, 292.0, 655.0), fill=(1, 1, 1))
     p1.apply_redactions()
 
     abstract_text = (
-        "Abstract—Consumer operating systems hold our most sensitive digital records, "
+        "Abstract---Consumer operating systems hold our most sensitive digital records, "
         "including credentials, email threads, filesystem hierarchies, and private schedules. "
         "While commercial cloud assistants offer fluent conversational interfaces, streaming personal "
         "host telemetry across external networks exposes users to severe privacy and surveillance liabilities. "
@@ -57,7 +65,7 @@ def patch_pdf():
         "construction as a bounded 0-1 Knapsack problem, combining greedy relevance-density ranking with a single-item "
         "safeguard to provably guarantee a 1/2-approximation bound without token overflow. For long-term memory, an "
         "incremental NetworkX multigraph performs probabilistic path-ranking, resolving multi-hop entity queries in "
-        "1.158 ms (±0.241 ms). Background routines are regulated by a piecewise adaptive heartbeat scheduler that scales "
+        "1.158 ms (+-0.241 ms). Background routines are regulated by a piecewise adaptive heartbeat scheduler that scales "
         "polling frequency from 30 s down to 900 s during dormancy, while a multi-axis affective engine dynamically "
         "reprioritizes tasks when user urgency and frustration escalate. Tool execution is constrained by a 5-tier poset "
         "permission lattice with interactive confirmation prompts, alongside an isolated Win32 desktop station hook "
@@ -70,9 +78,15 @@ def patch_pdf():
         "sessions due to graph synonym fragmentation, while requiring 463.1 MB active RAM in hybrid mode and 5,313 MB "
         "in full on-device 8B model inference."
     )
+    index_terms_text = (
+        "Index Terms---Large Action Models (LAM), Microsoft Agent Framework, Relational Knowledge Graphs, "
+        "Knapsack Optimization, On-Device Inference, Agent Security Middleware, Ambient Computing."
+    )
+    full_abstract_block = abstract_text + "\n\n" + index_terms_text
+
     rc_abs = p1.insert_textbox(
         fitz.Rect(47.6, 249.0, 291.8, 655.0),
-        abstract_text, fontsize=7.8, fontname="times-roman", lineheight=1.16
+        full_abstract_block, fontsize=7.8, fontname="times-bold", lineheight=1.15
     )
     print(f"  -> Page 1 Abstract rc: {rc_abs}")
 
@@ -107,7 +121,7 @@ def patch_pdf():
     )
     rc_contrib = p2.insert_textbox(
         fitz.Rect(47.6, 85.0, 291.8, 482.0),
-        contrib_text, fontsize=8.0, fontname="times-roman", lineheight=1.18
+        contrib_text, fontsize=8.8, fontname="times-roman", lineheight=1.21
     )
     print(f"  -> Page 2 Contrib rc: {rc_contrib}")
 

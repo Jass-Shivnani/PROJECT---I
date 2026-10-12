@@ -3,8 +3,8 @@ import shutil
 from pathlib import Path
 import fitz
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-DOCS_DIR = BASE_DIR / "docs"
+DOCS_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = DOCS_DIR.parent
 SRC_PDF = DOCS_DIR / "DIONE_IEEE_RESEARCH_PAPER_A4.pdf"
 AI_PDF = DOCS_DIR / "DIONE_IEEE_PAPER_AI_AUDIT_HIGHLIGHTED.pdf"
 DOWNLOADS_AI_PDF = Path(r"C:\Users\Jass\Downloads\DIONE_IEEE_PAPER_AI_AUDIT_HIGHLIGHTED.pdf")
