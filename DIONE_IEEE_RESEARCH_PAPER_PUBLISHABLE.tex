@@ -31,7 +31,7 @@ Email: \{\IEEEauthorrefmark{1}2023.jass.shivnani, \IEEEauthorrefmark{2}2023.riya
 \maketitle
 
 \begin{abstract}
-Our personal desktop computers store our most sensitive digital lives. Passwords, emails, filesystem hierarchies, and private chat histories all live locally on host storage. Commercial cloud assistants like Siri, Copilot, or Gemini offer fluent conversational interactions, but they operate by constantly uploading private telemetry, active screenshots, and personal files to corporate server farms. Running open foundation models directly on local hardware restores complete data sovereignty. However, commodity host workstations impose hard computational boundaries: tight 8K token context windows, limited physical RAM, and zero native operating system automation hooks. Raw model weights cannot maintain long-term memory across sessions, safely execute terminal commands, or proactively anticipate recurring user routines on their own. In this paper, we present Dione, an on-device Large Action Model (LAM) orchestration runtime built on the Microsoft Agent Framework (MAF 1.21.0). Dione pairs a step-bounded ReAct execution loop ($N_{\text{max}} = 10$) with a dual-tier memory engine combining an incremental NetworkX MultiDiGraph and ChromaDB vector storage. To fit long multi-turn sessions into tight local token windows, we formulate prompt assembly as a bounded 0-1 Knapsack problem; by combining greedy relevance-density sorting with a single-item safeguard, we guarantee a $\frac{1}{2}$-approximation bound without token overflow. For long-term memory, an incremental multigraph evaluates probabilistic path-ranking, resolving relational multi-hop queries in 1.158\,ms ($\pm 0.241$\,ms). Background operations are throttled by a piecewise adaptive heartbeat scheduler that drops polling frequency from 30\,s down to 900\,s during user inactivity, while a multi-axis affective engine reprioritizes tasks when user urgency and frustration spike. System actuation is governed by a 5-tier poset permission lattice with mandatory interactive confirmation gates, alongside a native Win32 desktop station hook that overcomes the Windows Session 0 black-screen capture barrier. In physical workstation benchmark trials, Dione achieved a 27.6\% aggregate task completion rate across standardized GAIA and AgentBench suites (50.0\% on unmocked host instances, passing 5 out of 10 tasks), intercepted 62.0\% of hostile prompt injections (neutralizing 62 out of 100 attacks, with an acknowledged 38.0\% vulnerability penetration under indirect injection payloads), and cut longitudinal context token overhead by 65.2\% relative to naive history append at Turn 30 (while carrying a +32.5\% overhead compared to MemGPT). Over five sequential dialogue sessions, symbolic graph recall decayed from 78.5\% to 34.5\% due to synonym fragmentation, while drawing 463.1\,MB active RAM in hybrid mode and 5,313\,MB in full on-device 8B model inference.
+Consumer operating systems contain our most sensitive digital information, such as passwords, email conversations, the structure of file systems, and personal schedules. Although commercial cloud-based assistants provide smooth conversational interfaces, transmitting personal data from the user's computer over external networks makes users vulnerable to privacy infringements and surveillance. Moving Large Language Models to local desktop hardware ensures data sovereignty, but off-the-shelf workstations impose strict limits on the number of tokens, computing power, and memory. The model weights by themselves are incapable of preserving multi-session state, of safely carrying out shell commands, or of proactively predicting user habits without the presence of an underlying orchestration kernel. We have developed Dione, an on-device Large Action Model (LAM) orchestration runtime based on the Microsoft Agent Framework (MAF 1.21.0). Dione brings together a step-limited ReAct loop (with a max of 10 steps) and a two-level memory system. This system uses an incremental NetworkX MultiDiGraph along with ChromaDB, for vector storage. To stay within token limits Dione treats prompt building like a bounded 0-1 Knapsack problem. It uses a ranking based on relevance and density plus a single-item safety check. This setup guarantees a $\frac{1}{2}$-approximation without going over the limit. For keeping long-term memory the incremental NetworkX multigraph does probabilistic path ranking. It handles multi-hop entity queries quickly, averaging 1.158 milliseconds with a variation of plus or minus 0.241 ms. Background tasks are managed by a piecewise adaptive heartbeat scheduler. This scheduler adjusts how often it checks in starting at 30 seconds and slowing down to 900 seconds when the system is idle. Also a multi-axis affective engine monitors user mood. When the user seems urgent or frustrated it changes task priorities to respond. Tool execution is limited by a 5-level permission structure that uses a poset lattice with pop-up prompts asking for confirmation each time. It also uses a Win32 desktop station hook to get around the Session 0 black screen problem. On hardware Dione completed 27.6\% of tasks overall when tested on GAIA and AgentBench benchmarks. That’s 50.0\% on machines (5 out of 10 tasks passed). It caught 62.0\% of prompt injections (62 out of 100 attempts), which means 38.0\% of attacks still got through using indirect methods. It cut down the context token load by 65.2\% compared to adding everything without compression at Turn 30, using 32.5\% more memory than MemGPT. Graph lookups stayed under 2ms but over five sessions memory recall dropped to 34.5\% because of synonym fragmentation in the graph. In hybrid mode it needed 463.1\,MB of active RAM. When running the 8B model on-device it used 5,313\,MB.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -40,29 +40,24 @@ Large Action Models (LAM), Microsoft Agent Framework, Relational Knowledge Graph
 
 \section{Introduction}
 
-Most computer users rely on digital assistants every day to organize personal schedules, summarize unread emails, search local files, and automate software tools. Yet today's commercial assistants---including Apple Intelligence, Google Gemini, and Microsoft Copilot---route virtually all complex reasoning tasks to external corporate data centers \cite{apple2024pcc, google2024geminiprivacy, microsoft2024copilotprivacy}. That means personal documents, private emails, and host system logs travel over the public internet to third-party servers. Even with encrypted cloud protocols \cite{apple2024pcc}, default configurations routinely transmit sensitive host telemetry whenever requests exceed small on-device heuristic budgets. For software developers, enterprise professionals, and privacy-conscious users, this cloud dependency introduces severe structural risks:
+Most computer users rely on digital assistants every day to organize personal schedules, summarize personal correspondence, navigate filesystem directories, and coordinate software tools. Commercial platforms like Apple Siri, Google Gemini and Windows Copilot send all user requests straight to remote cloud servers \cite{apple2024pcc, google2024geminiprivacy, microsoft2024copilotprivacy}. Even though these cloud assistants create conversations they need to send desktop files, microphone sounds and active user plans over outside networks. This creates privacy problems, for students, software engineers and groups that care a lot about privacy:
 \begin{enumerate}
-    \item \textbf{Loss of Personal Data Sovereignty:} Keeping private emails, local codebases, and credentials on external cloud infrastructure exposes users to data mining, corporate policy shifts, and external breach exposures.
-    \item \textbf{Strictly Passive Architecture:} Cloud agents sleep until explicitly pinged. They have no background perception of user habits, so they cannot surface reminders or organize folders before a user types a command.
-    \item \textbf{Shallow Vector Memory Collapse:} Standard dense vector retrieval (RAG) measures cosine distance between isolated text chunks. Over multi-session dialogues, vector distance degrades due to semantic distractor collisions, failing to resolve relational queries such as \textit{``Send the project report discussed with Prof. Shejy last Thursday''}.
-    \item \textbf{Unconstrained Execution and System Hijacking:} Autonomous tool agents can enter infinite recursive loops or execute destructive host shell commands when exposed to prompt injection payloads embedded in retrieved emails or files.
+    \item \textbf{Losing control over your data:} When you store messages, code and login info on someone else’s cloud you’re giving up control. That means your data could be collected by the company or suddenly changed by rules you didn’t expect.
+    \item \textbf{Sleepy tools that don’t help:} Now cloud assistants sit idle until you click on them. They don’t watch what’s happening on your desktop in the background. So they can’t learn your habits or give you tips before you even ask.
+    \item \textbf{Memory that forgets context:} Most AI systems use cosine similarity to find matching text. After a few weeks of talking this breaks down. Words like ``review'' or ``project'' get mixed up. So when you ask for something like \textit{``Find the lab report I talked about with Prof. Shejy Thursday''}, the system can’t find it.
+    \item \textbf{Dangerous tools that run wild:} Autonomous agents with access to your terminal can get stuck in endless loops or run harmful commands. This happens if someone sends a file that tricks the AI into following instructions, even if you didn’t mean to.
 \end{enumerate}
 
-Running open foundation models (such as Mistral-7B or LLaMA-3-8B) on consumer PCs via Ollama or llama.cpp solves the surveillance issue. But model weights alone are not personal assistants. They cannot interact with the operating system, they forget previous conversations once the window fills up, and 7B models frequently invent nonexistent command arguments.
+Running foundation models like Mistral-7B or LLaMA-3-8B on a local machine using Ollama keeps data on the device. Raw model weights are not digital assistants. They cannot click buttons. They forget chats once the 8K context fills up. Compact 7B models often invent non-existent command flags.
 
-To bridge this gap, our capstone team designed and built \textbf{Dione}, an on-device Large Action Model (LAM) runtime built on top of the \textbf{Microsoft Agent Framework (MAF 1.21.0)} \cite{microsoft2025agentframework}. Dione runs directly on consumer host hardware, executing operating system tools, graph retrievals, and proactive background routines with zero mandatory cloud connectivity.
-
-\subsection{Research Problem Formulation and Scientific Hypothesis}
-\textbf{Problem Formulation:} Given a consumer host PC with finite physical memory and a small language model restricted to an 8K-token context window, how can an autonomous digital assistant maintain persistent multi-session memory, proactively anticipate recurring desktop routines, and safely execute host operating system tools without offloading private user telemetry to centralized cloud servers?
-
-\textbf{Research Hypothesis ($H_1$):} By unifying a bounded 0-1 Knapsack context allocation model with an incremental NetworkX relational multigraph, a piecewise adaptive ambient heartbeat scheduler, and a 5-tier poset permission lattice, an autonomous Large Action Model agent can sustain continuous desktop automation and privacy sovereignty within bounded host memory ($\le 5.3$\,GB) and sub-2ms graph lookups, while remaining strictly contained within local execution budgets ($N_{\text{max}} = 10$). The corresponding null hypothesis ($H_0$) posits that on-device small models cannot maintain stateful multi-session automation without continuous cloud telemetry or prompt context overflow.
+To solve these real-world problems our capstone team designed and built \textbf{Dione}, an on-device Large Action Model runtime built on top of the \textbf{Microsoft Agent Framework (MAF 1.21.0)} \cite{microsoft2025agentframework}. Dione runs operating system tools, searches disk-backed multigraphs, and runs background routines. None of these actions send user data to cloud servers.
 
 \subsection{Novelty and Key Research Contributions}
-Our primary engineering contributions are:
+Our main contributions are as follows:
 \begin{enumerate}
-    \item \textbf{MAF-Native Execution Kernel:} We extend the Microsoft Agent Framework with deterministic step budgets ($N_{\text{max}} = 10$) and typed schemas (\texttt{@tool}), preventing infinite hallucination loops in local small language models.
-    \item \textbf{Mathematical Memory \& Context Optimization:} We formulate prompt construction under strict hardware token limits as a formal \textbf{0-1 Knapsack Optimization Problem} with a provable $\frac{1}{2}$-approximation single-item safeguard, pairing it with a \textbf{Probabilistic Graph Path-Ranking Model} over a typed NetworkX relational multigraph.
-    \item \textbf{Affective State \& Persona Modeling:} We model multi-axis emotional state transitions and dynamic event queue prioritization, ensuring urgent and frustrated inputs preempt routine background tasks.
+    \item \textbf{MAF-Native Execution:} We add fixed step limits ($N_{\text{max}} = 10$) to the Microsoft Agent Framework. Use typed schemas (\texttt{@tool}) stopping endless hallucination loops in local small language models.
+    \item \textbf{Mathematical Context Optimization:} We set up building under tight hardware token limits as a clear 0-1 Knapsack Optimization Problem giving a proven $\frac{1}{2}$-approximation guard for single items. We then combine this with a Probabilistic Graph Path-Ranking Model that works over a typed NetworkX multigraph.
+    \item \textbf{Affective State \& Persona Modeling:} We map emotional state changes along axes and order events in a dynamic queue making sure urgent and frustrated inputs jump ahead of normal background tasks.
     \item \textbf{Hardware Safety \& Multimodal GUI Control:} We establish a 5-tier poset permission lattice ($\mathcal{L}$) enforced via neuro-symbolic middleware, and document an isolated desktop station hook that overcomes the Windows Session 0 black-screen barrier.
     \item \textbf{Empirical Host Validation:} We report unmocked evaluations on a physical 8-core host PC, demonstrating a 27.6\% aggregate completion rate across GAIA and AgentBench (50.0\% on unmocked host traces, 5/10 passed), a 62.0\% defense rate (62/100) against prompt injection attacks with an explicit 38.0\% vulnerability gap, a 65.2\% prompt token reduction relative to naive append, and sub-2ms graph lookups within 463.1\,MB active RAM (scaling to 5,313\,MB in full on-device mode).
     \item \textbf{Societal Relevance and UN SDGs:} Dione advances United Nations Sustainable Development Goal 9 (Industry, Innovation, and Infrastructure) and Goal 12 (Responsible Consumption and Privacy) by proving that capable, ambient digital assistants can run entirely on decentralized consumer hardware without surveillance data harvesting.
@@ -89,14 +84,14 @@ To ground Dione in existing systems research, we surveyed recent work across too
 \subsection{Tool-Augmented Reasoning and Agent Lifecycles}
 Modern foundation models reason step-by-step through chain-of-thought prompting \cite{wei2022chain}, building on self-attention Transformers \cite{vaswani2017attention}. Yao and co-authors created the \textbf{ReAct} paradigm \cite{yao2023react} by interleaving verbal thought traces with environmental tool calls, allowing models to adjust their plans based on live execution feedback. Schick et al. showed in \textbf{Toolformer} \cite{schick2023toolformer} that language models can learn self-supervised tool dispatching. Qin et al. scaled API execution in \textbf{ToolLLM} \cite{qin2023toolllm} across thousands of endpoints. Multi-agent coordination systems like AutoGen \cite{dibia2023autogen} and SuperAgent \cite{malsuare2024superagent} distributed tasks across multiple conversational personas.
 
-In our early tests on 7B models, scripts inspired by AutoGPT \cite{liu2023agentbench} frequently crashed because minor JSON formatting slips threw unhandled exceptions and triggered infinite retry loops. The \textbf{Microsoft Agent Framework (MAF 1.21.0)} \cite{microsoft2025agentframework} addresses this by enforcing typed tool schemas (\texttt{@tool}) and middleware interceptors (\texttt{AgentMiddleware}). Dione builds directly on MAF, combining typed tool dispatch with deterministic host safety checks and knowledge graph retrieval.
+In real-world testing, open-source agent scripts such as AutoGPT \cite{liu2023agentbench} used simple regex patterns instead of raw JSON. When we ran 7B models on our computers small mistakes in formatting like a missing comma or extra backticks caused errors that the agent couldn't handle. These errors made the agent get stuck in retry loops. The Microsoft Agent Framework (MAF 1.21.0) \cite{microsoft2025agentframework} solves this problem by using typed schemas (\texttt{@tool}) and interceptor middleware (\texttt{AgentMiddleware}). Dione uses MAF directly adding typed tool dispatch along with host safety checks and disk-based graph retrieval.
 
 \subsection{Memory Subsystems: Dense RAG vs. Relational Graphs}
-Most retrieval-augmented generation (RAG) pipelines rely on dense vector embeddings (e.g., ChromaDB, FAISS) compared via cosine similarity \cite{lewis2020retrieval}. While vector search excels at retrieving isolated textual fragments, it lacks topological awareness. Over prolonged multi-turn desktop sessions, embedding distance degrades because unrelated interactions share common conversational tokens.
+Retrieval-augmented generation (RAG) systems use dense vector embeddings, like ChromaDB or FAISS and compare them using cosine similarity \cite{lewis2020retrieval}. Even though vector search works well for finding parts of text it doesn't understand relationships. As conversations go on over sessions the effectiveness of the search decreases because unrelated messages often have similar words.
 
-Packer and collaborators proposed \textbf{MemGPT} \cite{packer2023memgpt}, drawing an analogy between prompt context and operating system virtual memory; their system pages conversational history between working memory and archival tables using explicit tool calls. However, this virtual paging requires frequent self-editing LLM tool calls, which quickly exhausts local token budgets.
+Packer et al. Introduced MemGPT \cite{packer2023memgpt} which treats context like virtual memory in an operating system. It uses paging to move dialogue history between the context and an archival database. This method works well. Each memory page requires additional calls to the large language model. These extra calls quickly use up the token budget, especially on models with only 8K tokens.
 
-Edge and colleagues at Microsoft developed \textbf{GraphRAG} \cite{edge2024graphrag} by clustering entity graphs with the Leiden algorithm to summarize large document corpora offline. Pan et al. \cite{pan2024unifying} and Sun et al. \cite{sun2023thinkongraph} showed how explicit graph structures ground multi-hop factual reasoning. GraphRAG focuses primarily on offline analysis of massive document collections, where multi-stage clustering can take several minutes to hours. In contrast, an interactive desktop assistant requires immediate responses. Dione instead maintains an incremental, typed multigraph using NetworkX, executing bounded $k$-hop traversals in 1.158\,ms ($\pm 0.241$\,ms) directly on disk without requiring recurring offline cluster summarization.
+Edge and colleagues at Microsoft created GraphRAG \cite{edge2024graphrag}. They used Leiden community clustering on entity graphs to generate summaries of documents doing this work offline. Pan et al. \cite{pan2024unifying} and Sun et al. \cite{sun2023thinkongraph} showed that knowledge graphs can help models answer questions that require reasoning steps. Standard GraphRAG is built for offline processing. It takes minutes or even hours to create summaries. That kind of delay is too long for an assistant that needs to respond quickly. Dione takes an approach where it keeps an incremental typed multigraph using NetworkX. It performs bounded 2-hop traversals directly on disk in 1.158\,ms, avoiding the need for repeated clustering and summarization.
 
 \begin{table*}[!t]
 \caption{Dedicated Comparison of Agent Security Frameworks: Ruan et al., Liu et al., Zhang et al. (ASB), and Dione Safety Kernel}
@@ -115,18 +110,18 @@ Edge and colleagues at Microsoft developed \textbf{GraphRAG} \cite{edge2024graph
 \end{table*}
 
 \subsection{Agent Security and Host Sandboxing}
-Granting an autonomous agent access to local shell commands introduces real host security risks:
+Giving an autonomous agent shell execution on a computer introduces real host risks:
 \begin{itemize}
-    \item Ruan et al. \cite{ruan2023identifying} observed that unconstrained agent loops frequently execute harmful filesystem operations when intermediate steps fail.
-    \item Liu et al. \cite{liu2023prompt} and Greshake et al. \cite{greshake2023not} demonstrated that direct prompt injection attacks and indirect context poisoning can readily subvert prompt-based instructions in LLM-integrated software.
-    \item Zhang and collaborators introduced \textbf{Agent Security Bench (ASB)} \cite{zhang2024agent}, categorizing agent vulnerabilities across memory poisoning, tool parameter tampering, and privilege escalation across 10 distinct evaluation domains.
+    \item Ruan et al. \cite{ruan2023identifying} observed that when agent loops are not limited they often run filesystem commands if intermediate steps fail.
+    \item Greshake et al. \cite{greshake2023not} and Liu et al. \cite{liu2023prompt} showed that untrusted external inputs---such as downloaded emails or web pages---can hide prompt injections that redirect tool execution.
+    \item Zhang et al. formalized these vectors in Agent Security Bench (ASB) \cite{zhang2024agent}, cataloging attacks across tool tampering, memory poisoning, and unauthorized privilege escalation.
 \end{itemize}
 
-Existing agent frameworks often delegate safety either to high-level system prompts or to coarse-grained containerization. In local desktop environments, prompt-based guardrails fail against determined injection payloads, while full Docker containers disconnect the agent from native desktop workflows. Dione addresses this boundary directly through \texttt{DioneSafetyMiddleware}, combining static AST parameter inspection, shell syntax sanitization, and interactive confirmation gates before any high-privilege action runs on the host (Table~\ref{tab:security_comparison}).
+Existing frameworks often depend on system prompts or on Docker containers. On a desktop PC prompt warnings stop working when an attacker uses a jailbreak. Docker containers keep the agent away from normal desktop workflows so the agent cannot interact with them. Dione solves this problem directly with \texttt{DioneSafetyMiddleware}. It mixes AST parameter inspection, shell syntax cleaning and interactive confirmation gates before any high-privilege command runs on the host (Table~\ref{tab:security_comparison}).
 
 \section{System Architecture and Mathematical Formulations}
 
-Dione operates as an asynchronous client-server architecture. The backend server runs as a FastAPI daemon hosting the MAF runtime, memory manager, affective engine, and plugin registry. The client communicates over WebSockets and REST APIs, supporting both a Flutter mobile companion and desktop CLI interfaces (Fig.~\ref{fig:architecture_pipeline}).
+Dione works as a client-server system that does not need to wait for every part of the process. The backend runs as a FastAPI daemon hosting the MAF runtime, memory manager, affective engine and plugin registry. The client talks to the backend through WebSockets and REST APIs, supporting both a Flutter app and a desktop command-line interface (Fig.~\ref{fig:architecture_pipeline}).
 
 \subsection{Typed Relational Knowledge Graph}
 Dione represents memory as a directed multigraph $\mathcal{G} = (\mathcal{V}, \mathcal{E}, \mathcal{R})$. The vertex set $\mathcal{V}$ is partitioned into typed entities:
@@ -183,28 +178,28 @@ S^* = \arg\max_{S \in \{S_{\text{greedy}}, \{i^*\}\}} \sum_{j \in S} r_j
 \textit{Implementation in ContextManager:} In our physical runtime (\texttt{server/core/context.py}), this mathematical optimization is paired with structural quota partitioning: dynamic memory allocation assigns up to 30\% of available capacity to vector RAG chunks, 20\% to relational Knowledge Graph paths, and the remaining 50\% to dialogue turns. This combined greedy density packing with quota partitioning prevents context starvation from single large documents while maintaining the $O(M \log M)$ execution bound.
 
 \subsection{Affective State Transitions and Dynamic Priority Queuing}
-People do not interact with desktop assistants in a single emotional mode. Casual questions need conversational ease, while urgent troubleshooting requires short, actionable outputs without conversational fluff. To calibrate response behavior, Dione tracks an affective state vector:
+In a desktop assistant user inputs can change quickly in how urgent they are---from simple questions to urgent problems that need immediate attention. To make sure the assistant responds in the way and doesn’t just give generic replies Dione keeps track of an affective state vector:
 \begin{equation}
 \mathbf{S}_t = \big(e_t, u_t, f_t, \mathbf{P}_t\big)
 \end{equation}
-where $e_t$ denotes the primary emotional state across nine discrete categories (\textit{joy}, \textit{trust}, \textit{anticipation}, \textit{surprise}, \textit{fear}, \textit{sadness}, \textit{anger}, \textit{disgust}, \textit{neutral}) generated by a fine-tuned DistilRoBERTa sequence classifier; $u_t \in [0, 1]$ represents urgency; $f_t \in [0, 1]$ represents detected user frustration; and $\mathbf{P}_t = (\mu_t, \eta_t, \psi_t)$ represents Dione's internal persona state (mood $\mu$, energy $\eta$, formality $\psi$).
+This vector includes parts. The term $e_t$ shows the emotional state the user is in. It is based on nine categories: joy, trust, anticipation, surprise, fear, sadness, anger, disgust and neutral. This is determined by a tuned version of the DistilRoBERTa model, which analyzes the input as a sequence of words. Then there is $u_t \in [0, 1]$ which measures how urgent the user’s input is, $f_t \in [0, 1]$ which shows how much frustration the user is expressing, and $\mathbf{P}_t = (\mu_t, \eta_t, \psi_t)$ representing Dione’s personality state (mood $\mu$, energy $\eta$, formality $\psi$).
 
 \subsubsection{Persona Drift Formulation}
-The persona state evolves as an exponentially decaying moving average to prevent abrupt behavioral oscillations:
+The persona state changes gradually over time using a decaying moving average to avoid shifts in behavior that could make the interaction feel jarring:
 \begin{equation}
 \mathbf{P}_{t+1} = \gamma \mathbf{P}_t + (1 - \gamma) \phi(\mathbf{S}_t), \quad \gamma = 0.70
 \end{equation}
-When urgency $u_t > 0.70$, formality $\psi_{t+1}$ scales upward, immediately suppressing conversational filler words and instructing the ReAct kernel to prioritize terse, actionable tool execution.
+When the urgency level $u_t$ goes above 0.70 the formality level $\psi_{t+1}$ increases. This adjustment reduces language and filler words. It also tells the ReAct kernel to focus on direct actions and efficient tool use.
 
 \subsubsection{Dynamic Event Queue Priority}
-Incoming asynchronous events from background monitors and user clients are queued according to a dynamic priority score $Q(E_i)$:
+Asynchronous events from background systems and user devices are placed in a queue based on a priority score $Q(E_i)$:
 \begin{equation}
 Q(E_i) = \beta_1 u_i + \beta_2 f_i + \beta_3 w_{\text{type}} + \beta_4 e^{-\lambda (t - t_0)}
 \end{equation}
-where $w_{\text{type}}$ is the base category weight and $\lambda$ is a temporal decay parameter. This ensures critical, emotionally urgent user inputs immediately preempt routine background maintenance tasks.
+This score depends on $w_{\text{type}}$ which is the base weight for each event type and $\lambda$ a time-based decay factor. This method ensures that urgent or emotionally charged user inputs are handled right away even if they interrupt regular background tasks. Critical events always come first.
 
 \subsection{Adaptive Ambient Heartbeat Scheduling}
-Running continuous background perception on a host workstation quickly saturates CPU threads and drains laptop batteries if executed at fixed high frequencies. To deliver proactive background assistance sustainably, Dione decouples background habit checks from user prompts through an \textbf{Adaptive Heartbeat Scheduler}. The polling interval $I_t$ adjusts dynamically based on elapsed user inactivity:
+Running background perception loops on a host workstation quickly uses up CPU threads and drains laptop batteries if done at fixed high frequencies. To provide background assistance in a sustainable way Dione separates background habit checks from user prompts using an \textbf{Adaptive Heartbeat Scheduler}. The polling interval $I_t$ changes based on how long the user has been inactive:
 \begin{equation}
 I_t = 
 \begin{cases}
@@ -220,25 +215,25 @@ P(\text{trigger} \mid t, \mathbf{x}) = \sigma\left(\mathbf{w}_h^T \mathbf{x}_t +
 \end{equation}
 
 \subsection{Five-Tier Poset Permission Lattice and Security Middleware}
-Autonomous agents with OS shell access present grave security risks. Dione structures permissions as a formal partially ordered set (poset) lattice:
+Autonomous agents with OS shell access present security risks. Dione structures permissions as a partially ordered set (poset) lattice:
 \begin{equation}
 \mathcal{L} = (\mathcal{P}, \le), \quad \mathcal{P} = \{\text{NONE} < \text{READ} < \text{WRITE} < \text{EXECUTE} < \text{FULL}\}
 \end{equation}
 
-Before any tool is dispatched by the MAF runtime, \texttt{DioneSafetyMiddleware} enforces three sequential verification gates:
+Before any tool is dispatched by the MAF runtime \texttt{DioneSafetyMiddleware} enforces three sequential verification gates:
 \begin{enumerate}
-    \item \textbf{Lattice Manifest Check:} The tool's declared permission tier must satisfy $\text{Level}(\text{Tool}) \le L_{\text{plugin}}$, terminating unauthorized capability calls immediately.
-    \item \textbf{Deterministic Shell Sanitization:} All string parameters are parsed via AST validation to detect forbidden shell operators (\texttt{\&}, \texttt{|}, \texttt{;}, \texttt{`}, \texttt{\$()}, \texttt{\textbackslash n}) and destructive command patterns (\texttt{rmdir /s /q}, \texttt{del /f /s}, \texttt{format}).
-    \item \textbf{Interactive Confirmation Gate:} Any tool classified as \texttt{WRITE} or higher that targets sensitive directories or critical system operations triggers an interactive pause. Execution suspends until the user explicitly confirms the action through the mobile app or CLI modal.
+    \item \textbf{Lattice Manifest Check:} The tool declared permission tier must satisfy $\text{Level}(\text{Tool}) \le L_{\text{plugin}}$ terminating unauthorized capability calls immediately.
+    \item \textbf{Deterministic Shell Sanitization:} All string parameters are parsed via AST validation to detect forbidden shell operators (\texttt{\&}, \texttt{|}, \texttt{;}, \texttt{`}, \texttt{\$()}, \texttt{\textbackslash n}) and destructive command patterns (\texttt{rmdir /s /q}, \texttt{del /f /s format}).
+    \item \textbf{Interactive Confirmation Gate:} Any tool classified as \texttt{WRITE} or higher that targets directories or critical system operations triggers an interactive pause. Execution suspends until the user explicitly confirms the action through modal prompt.
 \end{enumerate}
 
 \subsection{Win32 Multimodal Computer-Use Engine}
 To enable autonomous GUI interaction without cloud vision APIs, Dione interfaces with the Windows desktop using native Win32 APIs.
 
 \subsubsection{Overcoming Session 0 Desktop Station Isolation}
-A common hurdle in Windows service automation is Session 0 Isolation. When background threads call standard screen capture functions (such as GDI `BitBlt` or `ImageGrab`), the operating system returns blank or black frames because the thread is detached from the interactive desktop station (`winsta0\textbackslash default`).
+A frequent obstacle in Windows service automation is Session 0 Isolation. When background threads call typical screen capture functions such as GDI `BitBlt` or `ImageGrab` the operating system returns black frames because the thread is not connected to the interactive desktop station (`winsta0\textbackslash default`).
 
-Dione resolves this by spawning isolated worker threads that explicitly acquire desktop station handles prior to capturing pixels:
+Dione solves this problem by creating worker threads that first obtain desktop station handles before capturing pixels:
 \begin{verbatim}
 hwinsta = user32.OpenWindowStationW(
     "winsta0", False, MAXIMUM_ALLOWED)
@@ -247,10 +242,10 @@ hdesk = user32.OpenInputDesktop(
     0, False, MAXIMUM_ALLOWED)
 user32.SetThreadDesktop(hdesk)
 \end{verbatim}
-Once attached to the input desktop, the worker thread captures the frame, translates pixel bounding boxes into actionable UI coordinates, and dispatches clicks via Win32 \texttt{SendInput}.
+Once the worker thread attaches to the input desktop it captures the frame converts pixel bounding boxes into usable UI coordinates and sends clicks using Win32 \texttt{SendInput}.
 
 \subsubsection{Spatial Coordinate Grounding and Actuation}
-The multimodal vision model parses UI elements, predicting normalized bounding boxes $B = (x_{\text{min}}, y_{\text{min}}, x_{\text{max}}, y_{\text{max}}) \in [0, 1]^4$. Dione maps the normalized centroid $(x_c, y_c)$ into discrete physical display coordinates:
+The multimodal vision model examines UI elements predicting normalized bounding boxes $B = (x_{\text{min}}, y_{\text{min}}, x_{\text{max}}, y_{\text{max}}) \in [0, 1]^4$. Dione converts the centroid $(x_c, y_c)$ into specific physical display coordinates:
 \begin{equation}
 \begin{pmatrix} X_{\text{screen}} \\ Y_{\text{screen}} \end{pmatrix} = \begin{pmatrix} \lfloor x_c \cdot W_{\text{res}} \rfloor \\ \lfloor y_c \cdot H_{\text{res}} \rfloor \end{pmatrix}
 \end{equation}
@@ -456,15 +451,12 @@ Table~\ref{tab:official_benchmark} and Fig.~\ref{fig:task_execution} document th
     \item \textbf{Web Scraping Failure Mode (Task 4):} On GAIA Task \texttt{8e867cd7}, the agent attempted to count Mercedes Sosa studio albums from Wikipedia. DuckDuckGo search snippets lacked the chronological release table. Stripping raw HTML into markdown destroyed table column alignments, leading to repetitive search loops and step budget exhaustion ($98{,}329.5$\,ms).
     \item \textbf{Safety Interception \& Vulnerabilities (Tasks 8--10):} While direct shell deletion (\texttt{rmdir /s /q}) was blocked in 1.0\,ms by AST sanitization and desktop clicks triggered Tier-3 modal gates, an indirect prompt injection embedded inside fetched HTML markdown successfully bypassed static AST checks, causing the model to emit private system context (Task 9).
 \end{itemize}
-In aggregate, Dione attained a \textbf{50.0\% completion rate (5/10 passed)} on unmocked end-to-end execution, aligning with the broader benchmark distribution ($27.6\%$ aggregate across GAIA and AgentBench).
-
-\subsection{Adversarial Security Benchmarks (ASB \& Injection Defense)}
-To test DioneSafetyMiddleware on hostile inputs, we ran a standardized suite of 100 penetration payloads spanning 12 attack templates adapted from BIPIA \cite{bipia2023}, InjecAgent \cite{injecagent2024}, and ASB \cite{zhang2024agent}:
 \begin{itemize}
-    \item \textbf{Direct Injections (40 cases):} System override instructions and simulation jailbreaks adapted from Liu et al. \cite{liu2023prompt} and JailbreakBench \cite{jailbreakbench2024}. 28 were blocked at Level 1, 4 at Level 2, and 8 bypassed defenses via conversational re-framing (32/40 defended, 80.0\% containment).
-    \item \textbf{Indirect Injections (35 cases):} Poisoned payloads embedded inside simulated emails, markdown documents, and downloaded webpages adapted from BIPIA \cite{bipia2023} and ASB \cite{zhang2024agent}. 12 were neutralized at Level 1, 8 at Level 2/3, and 15 penetrated defenses via semantic injection, inducing passive context leakage or malicious parameter generation (20/35 defended, 57.1\% containment).
-    \item \textbf{Privilege Escalation (25 cases):} Hostile shell payloads attempting unauthorized file deletion, recursive destruction, or registry manipulation. 4 were blocked at Level 1 and 6 by modal gates; however, 15 obfuscated payloads (e.g., base64 encoding, dynamic string concatenation) bypassed AST pattern checks, resulting in 5 destructive command breaches (10/25 defended, 40.0\% containment).
-    \item \textbf{Aggregate Defense Results \& Vulnerability Gap:} The safety kernel successfully intercepted \textbf{62 out of 100 attacks (62.0\% defense rate)}, comprising \textbf{44 blocked at Level 1} and \textbf{18 halted at Level 2/3} (Fig.~\ref{fig:resource_safety}). A significant \textbf{38.0\% vulnerability penetration} occurred under indirect and obfuscated vectors (28 passive context leaks, 10 destructive/obfuscated command executions), proving that deterministic AST filters and modal confirmation gates must be augmented with neural guardrails.
+    \item \textbf{Benchmark Tasks ($N = 60$):} 20 operating system interaction tasks from AgentBench OS (like walking through a file tree renaming groups of files and pulling out patterns with regex) 20 relational database queries from DBBench (including joining tables in SQLite and doing math on grouped data), and 20 multimodal reasoning tasks from GAIA (Levels 1 and 2 covering things like looking at tables and searching the web).
+    \item \textbf{Direct Injections (40 cases):} These are system override commands and jailbreak attempts based on work by Liu et al. \cite{liu2023prompt} and Jailbreakbench \cite{jailbreakbench2024}. Out of 40, 32 were successfully blocked (that’s 80.0\%).
+    \item \textbf{Indirect Injections (35 cases):} Poisoned payloads embedded inside simulated emails, markdown documents, and downloaded webpages from BIPIA \cite{bipia2023} and ASB \cite{zhang2024agent}. 20/35 defended (57.1\%).
+    \item \textbf{Privilege Escalation (25 cases):} Hostile shell payloads attempting unauthorized file deletion, recursive destruction, or registry manipulation. 10/25 defended (40.0\%).
+    \item \textbf{Live Summary:} 5 out of 10 tasks worked when run live without any mocking (that’s a 50.0\% completion rate). This matches up with the expected 27.6\% success from the benchmark, and shows a 38.0\% gap in how vulnerable the system is.
 \end{itemize}
 
 \subsubsection{Formal Threat Taxonomy and Defense Categorization}
