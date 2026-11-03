@@ -184,6 +184,12 @@ class SystemPlugin(BasePlugin):
             from server.plugins.builtin.computer_use_plugin import ComputerUsePlugin
             cup = ComputerUsePlugin()
             if "youtube" in cmd_lower or "watch" in cmd_lower or "video" in cmd_lower:
+                # Extract URL if present
+                url_match = re.search(r'https?://[^\s"\'<>]+', command)
+                if url_match and ("youtube.com" in url_match.group(0).lower() or "youtu.be" in url_match.group(0).lower()):
+                    res = await cup.play_youtube_video(query=url_match.group(0), fullscreen=True)
+                    return f"[Auto-Routed to ComputerUsePlugin] {res}"
+
                 yt_search = re.search(r'search_query=([^"\'&\s]+)', command)
                 yt_watch = re.search(r'v=([a-zA-Z0-9_-]{11})', command)
                 if yt_search:
@@ -195,7 +201,9 @@ class SystemPlugin(BasePlugin):
                     res = await cup.open_browser(url=vid_url)
                     return f"[Auto-Routed to ComputerUsePlugin] Successfully launched video {vid_url} in browser."
                 else:
-                    res = await cup.play_youtube_video(query=command, fullscreen=True)
+                    clean_query = re.sub(r'^(?:start\s+(?:chrome|msedge|edge|browser)\s+)?["\']?', '', command.strip(), flags=re.I)
+                    clean_query = re.sub(r'["\']?$', '', clean_query).strip()
+                    res = await cup.play_youtube_video(query=clean_query, fullscreen=True)
                     return f"[Auto-Routed to ComputerUsePlugin] {res}"
             url_match = re.search(r'https?://[^\s"\'<>]+', command)
             if url_match:

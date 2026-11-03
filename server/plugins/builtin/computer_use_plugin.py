@@ -658,30 +658,77 @@ class ComputerUsePlugin(BasePlugin):
     )
     async def play_youtube_video(self, query: str, fullscreen: bool = True, browser: str = "auto") -> str:
         """Resolve top YouTube video watch URL and launch directly."""
-        encoded = urllib.parse.quote_plus(query)
-        search_url = f"https://www.youtube.com/results?search_query={encoded}"
+        raw_input = (query or "").strip()
+
+        # 1. Clean CLI execution wrappers and outer quotes (e.g. 'start chrome "..."')
+        clean_q = re.sub(r'^(?:start\s+(?:chrome|msedge|edge|browser)\s+)?["\']?', '', raw_input, flags=re.I)
+        clean_q = re.sub(r'["\']?$', '', clean_q).strip()
+
         watch_url = None
 
-        try:
-            req = urllib.request.Request(
-                search_url,
-                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
-            )
-            loop = asyncio.get_running_loop()
-            html = await loop.run_in_executor(
-                None, lambda: urllib.request.urlopen(req, timeout=4.5).read().decode("utf-8", errors="ignore")
-            )
-            video_ids = re.findall(r"/watch\\?v=([a-zA-Z0-9_-]{11})", html) or re.findall(r'"videoId":"([a-zA-Z0-9_-]{11})"', html)
-            if video_ids:
-                watch_url = f"https://www.youtube.com/watch?v={video_ids[0]}"
-        except Exception as e:
-            logger.debug(f"[YouTube] Direct ID lookup note: {e}")
+        # 2. Check if already a direct YouTube watch URL
+        watch_match = re.search(r'(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})', clean_q)
+        if watch_match:
+            watch_url = f"https://www.youtube.com/watch?v={watch_match.group(1)}"
 
-        target_url = watch_url or search_url
+        # 3. Check if channel URL (e.g. https://www.youtube.com/@MrWhosetheboss or @MrWhosetheboss/videos)
+        if not watch_url:
+            channel_match = re.search(r'(?:https?://(?:www\.)?youtube\.com/)?(@[a-zA-Z0-9_.-]+(?:/videos)?)', clean_q)
+            if channel_match:
+                ch_path = channel_match.group(1)
+                if not ch_path.endswith('/videos'):
+                    ch_path += '/videos'
+                ch_url = f"https://www.youtube.com/{ch_path}"
+                try:
+                    req = urllib.request.Request(
+                        ch_url,
+                        headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+                    )
+                    loop = asyncio.get_running_loop()
+                    html = await loop.run_in_executor(
+                        None, lambda: urllib.request.urlopen(req, timeout=5.0).read().decode("utf-8", errors="ignore")
+                    )
+                    vids = re.findall(r'"videoId":"([a-zA-Z0-9_-]{11})"', html) or re.findall(r'/watch\?v=([a-zA-Z0-9_-]{11})', html)
+                    if vids:
+                        watch_url = f"https://www.youtube.com/watch?v={vids[0]}"
+                except Exception as e:
+                    logger.debug(f"[YouTube] Channel video lookup note: {e}")
+
+        # 4. Standard YouTube search with natural language prefix stripping
+        if not watch_url:
+            search_terms = re.sub(r'\b(?:open\s+(?:yt|youtube)\s+(?:and\s+)?|play\s+|in\s+full\s*screen|full\s*screen)\b', '', clean_q, flags=re.I).strip()
+            if not search_terms:
+                search_terms = clean_q
+
+            encoded = urllib.parse.quote_plus(search_terms)
+            search_url = f"https://www.youtube.com/results?search_query={encoded}"
+
+            try:
+                req = urllib.request.Request(
+                    search_url,
+                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+                )
+                loop = asyncio.get_running_loop()
+                html = await loop.run_in_executor(
+                    None, lambda: urllib.request.urlopen(req, timeout=5.0).read().decode("utf-8", errors="ignore")
+                )
+                # Specifically extract search result videoRenderer videoIds to avoid recommendations/ads
+                video_ids = re.findall(r'"videoRenderer":\s*\{"videoId":"([a-zA-Z0-9_-]{11})"', html)
+                if not video_ids:
+                    video_ids = re.findall(r'"videoId":"([a-zA-Z0-9_-]{11})"', html)
+                if not video_ids:
+                    video_ids = re.findall(r'/watch\?v=([a-zA-Z0-9_-]{11})', html)
+
+                if video_ids:
+                    watch_url = f"https://www.youtube.com/watch?v={video_ids[0]}"
+            except Exception as e:
+                logger.debug(f"[YouTube] Direct ID lookup note: {e}")
+
+        target_url = watch_url or (f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(clean_q)}" if not clean_q.startswith("http") else clean_q)
         await self.open_browser(url=target_url, browser=browser, fullscreen=fullscreen)
 
         if fullscreen and watch_url:
-            await asyncio.sleep(1.5)
+            await asyncio.sleep(1.8)
             self._focus_window_by_keyword("youtube")
             self._send_native_win32_key("f")
 
