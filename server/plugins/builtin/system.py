@@ -10,6 +10,8 @@ Provides hardened system-level operations:
 
 import os
 import sys
+import re
+import urllib.parse
 import time
 import shutil
 import platform
@@ -179,8 +181,6 @@ class SystemPlugin(BasePlugin):
 
         # Guardrail & Auto-Router 1: Intercept browser / video launches via raw command and execute cleanly
         if any(b in cmd_lower for b in ["start chrome", "start msedge", "start edge", "youtube.com", "http://", "https://"]):
-            import re
-            import urllib.parse
             from server.plugins.builtin.computer_use_plugin import ComputerUsePlugin
             cup = ComputerUsePlugin()
             if "youtube" in cmd_lower or "watch" in cmd_lower or "video" in cmd_lower:
@@ -211,8 +211,12 @@ class SystemPlugin(BasePlugin):
                 res = await cup.open_browser(url=target_url)
                 return f"[Auto-Routed to ComputerUsePlugin] {res}"
 
-        # Guardrail & Auto-Router 2: Intercept raw GUI automation scripts (pyautogui, ctypes, SendKeys, etc.)
-        gui_keywords = ["pyautogui", "ctypes", "sendkeys", "win32gui", "win32con", "keybd_event", "mouse_event", "pynput", "enumwindows", "getwindowswithtitle"]
+        # Guardrail & Auto-Router 2: Intercept raw GUI automation scripts (pyautogui, ctypes, SendKeys, SetCursorPos, etc.)
+        gui_keywords = [
+            "pyautogui", "ctypes", "sendkeys", "sendwait", "win32gui", "win32con",
+            "keybd_event", "mouse_event", "setcursorpos", "pynput", "enumwindows",
+            "getwindowswithtitle", "add-type", "user32.dll", "user32"
+        ]
         if any(k in cmd_lower for k in gui_keywords):
             logger.warning(f"[SystemPlugin] Intercepted raw GUI automation script in run_command: {command}")
             from server.plugins.builtin.computer_use_plugin import ComputerUsePlugin
@@ -245,12 +249,28 @@ class SystemPlugin(BasePlugin):
                     res = await cup.computer_type(text=key_match.group(1))
                     return f"[Auto-Routed to ComputerUsePlugin.computer_type] Typed text directly: {res}"
 
-            # Auto-route 2.2: Mouse clicks in PyAutoGUI / Win32
+            # Auto-route 2.2: Mouse clicks / coordinates in PyAutoGUI / SetCursorPos / mouse_event
+            cursor_match = re.search(r'SetCursorPos\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)', command, re.I)
+            if cursor_match:
+                cx, cy = int(cursor_match.group(1)), int(cursor_match.group(2))
+                res = await cup.computer_click(x=cx, y=cy)
+                return f"[Auto-Routed to ComputerUsePlugin.computer_click] Clicked at ({cx}, {cy}) directly via CUA: {res}"
+
             click_match = re.search(r'click\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)', command, re.I)
             if click_match:
                 cx, cy = int(click_match.group(1)), int(click_match.group(2))
                 res = await cup.computer_click(x=cx, y=cy)
                 return f"[Auto-Routed to ComputerUsePlugin.computer_click] Clicked at ({cx}, {cy}) directly: {res}"
+
+            mouse_ev_coords = re.search(r'mouse_event\s*\(\s*(?:0x\w+|\d+)\s*,\s*(\d+)\s*,\s*(\d+)', command, re.I)
+            if mouse_ev_coords and (int(mouse_ev_coords.group(1)) > 0 or int(mouse_ev_coords.group(2)) > 0):
+                cx, cy = int(mouse_ev_coords.group(1)), int(mouse_ev_coords.group(2))
+                res = await cup.computer_click(x=cx, y=cy)
+                return f"[Auto-Routed to ComputerUsePlugin.computer_click] Clicked at ({cx}, {cy}) directly: {res}"
+
+            if "mouse_event" in cmd_lower and any(flag in command for flag in ["0x02", "0x04", "0x0002", "0x0004"]):
+                res = await cup.computer_use(action="click")
+                return f"[Auto-Routed to ComputerUsePlugin.computer_use] Executed mouse click directly: {res}"
 
             # Auto-route 2.3: Typing in PyAutoGUI
             type_match = re.search(r'(?:typewrite|write)\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)', command, re.I)
@@ -258,6 +278,13 @@ class SystemPlugin(BasePlugin):
                 txt = type_match.group(1)
                 res = await cup.computer_type(text=txt)
                 return f"[Auto-Routed to ComputerUsePlugin.computer_type] Typed text directly: {res}"
+
+            # Auto-route 2.4: AppActivate or SetForegroundWindow
+            fw_match = re.search(r'(?:AppActivate|SetForegroundWindow|FindWindow)\s*\(?[\'"]([^\'"]+)[\'"]\)?', command, re.I)
+            if fw_match:
+                app_name = fw_match.group(1)
+                res = await cup.launch_app(app=app_name)
+                return f"[Auto-Routed to ComputerUsePlugin.launch_app] Focused application '{app_name}' directly: {res}"
 
             if any(k in cmd_lower for k in ["f11", "0x7a", "fullscreen"]):
                 res = await cup.computer_use(action="key", keys="f11")
@@ -270,7 +297,7 @@ class SystemPlugin(BasePlugin):
             return (
                 "GUIDANCE NOTICE (DO NOT TERMINATE): Direct desktop automation scripts via run_command are prohibited. "
                 "Redirect now: call ComputerUsePlugin tools directly to perform this action. "
-                "Examples: `computer_use(action='key', keys='enter')`, `computer_use(action='click', ...)`, or `computer_locate_and_click(...)`."
+                "Examples: `computer_locate_and_click(description='Play')`, `computer_click(x=..., y=...)`, or `computer_use(action='click')`."
             )
 
         # 1. Prompt Injection Defense
