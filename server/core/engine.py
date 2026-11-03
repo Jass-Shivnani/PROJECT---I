@@ -1127,13 +1127,10 @@ Use Computer-Use tools ONLY when the user asks to control desktop GUI apps, brow
                     final_raw_text = res_str if success else f"Error: {err}"
 
                     # 4.1 Fast Post-Action Desktop Audit (Only on GUI mutations, 150ms settle)
-                    _is_desktop_action = clean_tool_name in (
-                        "computer_locate_and_click",
-                        "computer_click",
-                        "computer_hotkey",
-                        "play_youtube_video",
-                        "launch_app",
-                        "open_browser",
+                    _is_desktop_action = (
+                        clean_tool_name.startswith("computer_")
+                        or clean_tool_name in ("play_youtube_video", "launch_app", "open_browser")
+                        or "[auto-routed to computeruseplugin" in res_str.lower()
                     )
                     if _is_desktop_action:
                         try:
@@ -1203,17 +1200,28 @@ Use Computer-Use tools ONLY when the user asks to control desktop GUI apps, brow
 
                     safe_tool_result = truncate_tool_result_text(final_raw_text)
 
+                    # Check for explicit operational guidance redirects (e.g. from run_command guardrails)
+                    is_guidance = (
+                        "guidance notice" in res_str.lower()
+                        or "redirect now:" in res_str.lower()
+                        or "you must call" in res_str.lower()
+                        or "strictly prohibited" in res_str.lower()
+                    )
+                    if is_guidance:
+                        state_tracker["has_guidance_redirection"] = True
+                        state_tracker["guidance_message"] = res_str[:600]
+                        logger.info(f"[Engine] Logged guidance redirect notice for next ReAct turn: {res_str[:120]}")
+
                     if not success or (err and str(err).strip()):
-
                         state_tracker["has_errors"] = True
-
                         state_tracker["last_error"] = str(err)
-
-                    elif "failed to execute" in res_str.lower() or "exit code: 1" in res_str.lower():
-
+                    elif (
+                        "failed to execute" in res_str.lower()
+                        or "exit code: 1" in res_str.lower()
+                        or (res_str.lower().startswith("error:") and not is_guidance)
+                    ):
                         state_tracker["has_errors"] = True
-
-                        state_tracker["last_error"] = res_str[:200]
+                        state_tracker["last_error"] = res_str[:300]
 
                     obs = Observation(
 
@@ -1605,29 +1613,65 @@ Use Computer-Use tools ONLY when the user asks to control desktop GUI apps, brow
 
                 resp = await chat_session.send_message(user_message)
 
-                # Closed-Loop Self-Correction & Reflection Loop
-                max_reflections = 2
+                # Closed-Loop Self-Correction & Redirection Loop (Guidance / Recoverable Errors / Visual Mismatch)
+                max_reflections = 3
                 while (
-                    state_tracker.get("had_desktop_action")
-                    and not state_tracker.get("last_goal_achieved", True)
+                    (
+                        state_tracker.get("has_guidance_redirection")
+                        or (state_tracker.get("has_errors") and not state_tracker.get("last_goal_achieved", False))
+                        or (state_tracker.get("had_desktop_action") and not state_tracker.get("last_goal_achieved", True))
+                    )
                     and state_tracker.get("reflection_count", 0) < max_reflections
                 ):
                     state_tracker["reflection_count"] = state_tracker.get("reflection_count", 0) + 1
-                    issue = state_tracker.get("last_goal_issue", "Target state not verified on screen.")
-                    advice = state_tracker.get("last_goal_advice", "Formulate and invoke the required corrective tool call immediately.")
-                    logger.info(f"[Engine] Triggering closed-loop visual reflection cycle #{state_tracker['reflection_count']} due to: {issue}")
+                    ref_idx = state_tracker["reflection_count"]
 
-                    reflection_prompt = (
-                        f"[Closed-Loop Visual Reflection Directive]:\n"
-                        f"Visual inspection of the desktop screenshot indicates your user's goal was NOT achieved.\n"
-                        f"- Target User Request: \"{user_message}\"\n"
-                        f"- Active Foreground Window: \"{state_tracker.get('last_window_title', 'Unknown')}\"\n"
-                        f"- Discrepancy / Error: {issue}\n\n"
-                        f"You MUST:\n"
-                        f"1. THINK: State what you did wrong (reflection).\n"
-                        f"2. CORRECT: Formulate and invoke the corrective tool call right now ({advice})."
-                    )
-                    resp = await chat_session.send_message(reflection_prompt)
+                    # Priority 1: Operational Guidance Redirection (tool returned guidance notice or prohibited method)
+                    if state_tracker.get("has_guidance_redirection"):
+                        guidance = state_tracker.pop("guidance_message", "Your previous tool returned an operational guidance directive.")
+                        state_tracker["has_guidance_redirection"] = False
+                        logger.info(f"[Engine] Triggering closed-loop redirection cycle #{ref_idx} due to guidance notice: {guidance[:100]}")
+                        directive_prompt = (
+                            f"[System Redirection Directive - Task In Progress (Turn #{ref_idx})]:\n"
+                            f"An executed tool returned this operational guidance directive:\n"
+                            f"\"{guidance}\"\n\n"
+                            f"CLOSED-LOOP OPERATIONAL RULES:\n"
+                            f"1. DO NOT abort or terminate the task. Errors and guidance notices exist to REDIRECT you, not stop you.\n"
+                            f"2. DO NOT output conversational text to the user explaining why you could not do it.\n"
+                            f"3. Target User Request: \"{user_message}\".\n"
+                            f"4. You MUST formulate and invoke the recommended tool call immediately (e.g. call ComputerUsePlugin tools or dedicated API tools directly) to fulfill the user's request now."
+                        )
+
+                    # Priority 2: Visual Goal Discrepancy (desktop action did not yield expected on-screen result)
+                    elif state_tracker.get("had_desktop_action") and not state_tracker.get("last_goal_achieved", True):
+                        issue = state_tracker.get("last_goal_issue", "Target state not verified on screen.")
+                        advice = state_tracker.get("last_goal_advice", "Formulate and invoke the required corrective tool call immediately.")
+                        logger.info(f"[Engine] Triggering closed-loop visual reflection cycle #{ref_idx} due to: {issue}")
+                        directive_prompt = (
+                            f"[Closed-Loop Visual Reflection Directive (Turn #{ref_idx})]:\n"
+                            f"Visual inspection of the desktop screenshot indicates your user's goal was NOT achieved.\n"
+                            f"- Target User Request: \"{user_message}\"\n"
+                            f"- Active Foreground Window: \"{state_tracker.get('last_window_title', 'Unknown')}\"\n"
+                            f"- Discrepancy / Error: {issue}\n\n"
+                            f"You MUST:\n"
+                            f"1. THINK: State what went wrong (reflection).\n"
+                            f"2. CORRECT: Formulate and invoke the corrective tool call right now ({advice})."
+                        )
+
+                    # Priority 3: Recoverable Tool Execution Error
+                    else:
+                        last_err = state_tracker.get("last_error", "An operation failed.")
+                        state_tracker["has_errors"] = False
+                        logger.info(f"[Engine] Triggering closed-loop error recovery cycle #{ref_idx} due to: {last_err[:100]}")
+                        directive_prompt = (
+                            f"[System Error Recovery Directive - Task In Progress (Turn #{ref_idx})]:\n"
+                            f"Your previous tool execution encountered an error: \"{last_err}\".\n\n"
+                            f"CLOSED-LOOP OPERATIONAL RULES:\n"
+                            f"1. DO NOT abort or terminate the task. This error is to REDIRECT your approach, not stop execution.\n"
+                            f"2. Inspect what caused the failure, pick an alternative tool or fix parameters, and invoke the tool immediately to accomplish: \"{user_message}\"."
+                        )
+
+                    resp = await chat_session.send_message(directive_prompt)
 
                 if resp.text:
 

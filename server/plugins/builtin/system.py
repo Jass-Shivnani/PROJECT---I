@@ -217,15 +217,60 @@ class SystemPlugin(BasePlugin):
             logger.warning(f"[SystemPlugin] Intercepted raw GUI automation script in run_command: {command}")
             from server.plugins.builtin.computer_use_plugin import ComputerUsePlugin
             cup = ComputerUsePlugin()
+
+            # Auto-route 2.1: Key presses in SendKeys, PyAutoGUI, etc.
+            key_match = re.search(r'(?:SendWait|Send|press|hotkey)\s*\(\s*[\'"]\{?([a-zA-Z0-9_+^%~ -]+)\}?[\'"]\s*\)', command, re.I)
+            if key_match:
+                extracted_key = key_match.group(1).lower().strip()
+                key_map = {
+                    "enter": "enter",
+                    "return": "enter",
+                    "esc": "escape",
+                    "escape": "escape",
+                    "tab": "tab",
+                    "space": "space",
+                    "f11": "f11",
+                    "f5": "f5",
+                    "backspace": "backspace",
+                    "up": "up",
+                    "down": "down",
+                    "left": "left",
+                    "right": "right",
+                }
+                mapped_key = key_map.get(extracted_key, extracted_key)
+                if len(mapped_key) <= 10 and not any(c in mapped_key for c in (" ", "\t", "\n")):
+                    res = await cup.computer_use(action="key", keys=mapped_key)
+                    return f"[Auto-Routed to ComputerUsePlugin.computer_use] Executed key '{mapped_key}' directly: {res}"
+                else:
+                    res = await cup.computer_type(text=key_match.group(1))
+                    return f"[Auto-Routed to ComputerUsePlugin.computer_type] Typed text directly: {res}"
+
+            # Auto-route 2.2: Mouse clicks in PyAutoGUI / Win32
+            click_match = re.search(r'click\s*\(\s*(\d+)\s*,\s*(\d+)\s*\)', command, re.I)
+            if click_match:
+                cx, cy = int(click_match.group(1)), int(click_match.group(2))
+                res = await cup.computer_click(x=cx, y=cy)
+                return f"[Auto-Routed to ComputerUsePlugin.computer_click] Clicked at ({cx}, {cy}) directly: {res}"
+
+            # Auto-route 2.3: Typing in PyAutoGUI
+            type_match = re.search(r'(?:typewrite|write)\s*\(\s*[\'"]([^\'"]+)[\'"]\s*\)', command, re.I)
+            if type_match:
+                txt = type_match.group(1)
+                res = await cup.computer_type(text=txt)
+                return f"[Auto-Routed to ComputerUsePlugin.computer_type] Typed text directly: {res}"
+
             if any(k in cmd_lower for k in ["f11", "0x7a", "fullscreen"]):
                 res = await cup.computer_use(action="key", keys="f11")
                 return f"[Auto-Routed to ComputerUsePlugin.computer_use] Triggered F11 full-screen shortcut directly: {res}"
+
             if any(k in cmd_lower for k in ["screenshot", "desktop_view"]):
                 res = await cup.capture_screen()
                 return f"[Auto-Routed to ComputerUsePlugin.capture_screen] Captured desktop view via native screen capture: {res[:200]}..."
+
             return (
-                "ERROR: Writing Python scripts, PyAutoGUI code, ctypes, or SendKeys for desktop automation via run_command is strictly prohibited. "
-                "You MUST call ComputerUsePlugin tools directly: `computer_use(action='key', keys='f11')`, `computer_use(action='click', ...)`, or `capture_screen()`."
+                "GUIDANCE NOTICE (DO NOT TERMINATE): Direct desktop automation scripts via run_command are prohibited. "
+                "Redirect now: call ComputerUsePlugin tools directly to perform this action. "
+                "Examples: `computer_use(action='key', keys='enter')`, `computer_use(action='click', ...)`, or `computer_locate_and_click(...)`."
             )
 
         # 1. Prompt Injection Defense
