@@ -3,11 +3,13 @@ import {
   ArrowUp,
   Monitor,
   Mic,
-  Camera,
-  BookOpen,
-  Volume2,
-  Cpu
+  MicOff,
+  ChevronDown,
+  Check,
+  RefreshCw,
+  Radio
 } from 'lucide-react';
+import { NeuralAudioClient, AudioDeviceOption } from '../services/neuralAudio';
 
 interface ComposerProps {
   onSend: (text: string) => void;
@@ -15,6 +17,10 @@ interface ComposerProps {
   computerUseEnabled: boolean;
   onToggleComputerUse: () => void;
   isListening?: boolean;
+  voiceStatusText?: string;
+  voiceVolume?: number;
+  selectedMicId?: string;
+  onSelectMic?: (deviceId: string) => void;
   onToggleMic?: () => void;
 }
 
@@ -23,16 +29,46 @@ export const Composer: React.FC<ComposerProps> = ({
   isLoading,
   computerUseEnabled,
   onToggleComputerUse,
-  isListening,
+  isListening = false,
+  voiceStatusText = '',
+  voiceVolume = 0,
+  selectedMicId = '',
+  onSelectMic,
   onToggleMic,
 }) => {
   const [text, setText] = useState('');
+  const [micDevices, setMicDevices] = useState<AudioDeviceOption[]>([]);
+  const [isMicMenuOpen, setIsMicMenuOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const micMenuRef = useRef<HTMLDivElement>(null);
+
+  const loadDevices = async () => {
+    const { inputs } = await NeuralAudioClient.getAudioDevices();
+    setMicDevices(inputs);
+  };
+
+  useEffect(() => {
+    loadDevices();
+    navigator.mediaDevices?.addEventListener?.('devicechange', loadDevices);
+    return () => {
+      navigator.mediaDevices?.removeEventListener?.('devicechange', loadDevices);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (micMenuRef.current && !micMenuRef.current.contains(e.target as Node)) {
+        setIsMicMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 160)}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
     }
   }, [text]);
 
@@ -53,78 +89,148 @@ export const Composer: React.FC<ComposerProps> = ({
     }
   };
 
-  const handleChipClick = (promptText: string) => {
-    onSend(promptText);
-  };
+  const activeMicLabel =
+    micDevices.find(d => d.deviceId === selectedMicId)?.label ||
+    micDevices[0]?.label ||
+    'Default Microphone';
 
   return (
-    <div className="w-full max-w-3xl mx-auto px-4 pb-4 pt-1 space-y-2">
-      {/* Subtle Jarvis Action Chips */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-[11px] font-sans no-scrollbar">
-        <button
-          onClick={() => handleChipClick("Take a desktop screenshot and check active windows")}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white transition-all flex-shrink-0"
-        >
-          <Camera className="w-3 h-3 text-cyan-400" />
-          <span>Screen & Windows</span>
-        </button>
-        <button
-          onClick={() => handleChipClick("Search recent arXiv papers on autonomous agent systems")}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white transition-all flex-shrink-0"
-        >
-          <BookOpen className="w-3 h-3 text-pink-400" />
-          <span>arXiv Papers</span>
-        </button>
-        <button
-          onClick={() => handleChipClick("Check system hardware telemetry and active audio endpoints")}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.08] text-slate-300 hover:text-white transition-all flex-shrink-0"
-        >
-          <Cpu className="w-3 h-3 text-emerald-400" />
-          <span>Telemetry & Audio</span>
-        </button>
-      </div>
+    <div className="w-full max-w-3xl mx-auto px-4 pb-4 pt-1">
+      {/* Live Voice Status Strip when active */}
+      {isListening && (
+        <div className="mb-2 px-3.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs text-emerald-200">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse flex-shrink-0" />
+            <span className="font-medium truncate">{voiceStatusText || 'Gemini Live + 3.8 Extended Thinking Active'}</span>
+            <span className="text-[10px] font-mono text-emerald-300/80 truncate hidden sm:inline">
+              ({activeMicLabel})
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="w-16 h-1.5 rounded-full bg-black/40 overflow-hidden">
+              <div
+                className="h-full bg-emerald-400 transition-all duration-75"
+                style={{ width: `${Math.min(100, Math.round((voiceVolume || 0) * 100))}%` }}
+              />
+            </div>
+            <button
+              onClick={onToggleMic}
+              className="px-2 py-0.5 rounded bg-red-500/20 hover:bg-red-500/30 text-red-300 text-[10px] font-mono"
+            >
+              Stop Voice
+            </button>
+          </div>
+        </div>
+      )}
 
-      {/* Floating Obsidian Capsule */}
-      <div className="relative rounded-2xl border border-white/[0.12] bg-[#10121a]/95 backdrop-blur-xl shadow-2xl transition-all focus-within:border-violet-500/70 focus-within:ring-2 focus-within:ring-violet-500/10">
+      {/* Main Composer Box */}
+      <div className="relative rounded-2xl border border-white/[0.12] bg-[#10121a]/95 backdrop-blur-xl shadow-2xl transition-all focus-within:border-violet-500/70">
         <textarea
           ref={textareaRef}
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask Dione or command workstation actions..."
+          placeholder="Message Dione or command apps, browser, emails, calendar, or files..."
           disabled={isLoading}
           rows={1}
-          className="w-full bg-transparent px-4 pt-3.5 pb-2 text-[13px] text-white placeholder-slate-400 focus:outline-none resize-none leading-relaxed min-h-[44px]"
+          className="w-full bg-transparent px-4 pt-3.5 pb-2 text-[13px] text-white placeholder-slate-400 focus:outline-none resize-none leading-relaxed min-h-[42px]"
         />
 
         <div className="flex items-center justify-between px-3 pb-2.5 pt-1">
           <div className="flex items-center gap-1.5">
+            {/* Split Mic Toggle + Hardware Microphone Selector */}
             {onToggleMic && (
-              <button
-                type="button"
-                onClick={onToggleMic}
-                className={`p-1.5 rounded-lg border transition-all ${
-                  isListening
-                    ? 'bg-emerald-500/20 border-emerald-500/40 text-emerald-300 animate-pulse'
-                    : 'border-transparent text-slate-400 hover:text-white hover:bg-white/[0.05]'
-                }`}
-                title="Voice Input"
-              >
-                <Mic className="w-4 h-4" />
-              </button>
+              <div className="relative flex items-center rounded-lg border border-white/[0.08] bg-white/[0.02]" ref={micMenuRef}>
+                <button
+                  type="button"
+                  onClick={onToggleMic}
+                  className={`px-2 py-1.5 rounded-l-lg flex items-center gap-1.5 text-xs transition-all ${
+                    isListening
+                      ? 'bg-emerald-500/20 text-emerald-300 font-medium'
+                      : 'text-slate-300 hover:text-white hover:bg-white/[0.05]'
+                  }`}
+                  title={isListening ? 'Disconnect Live Voice' : `Start Live Voice (${activeMicLabel})`}
+                >
+                  {isListening ? <Mic className="w-3.5 h-3.5 text-emerald-400" /> : <MicOff className="w-3.5 h-3.5 text-slate-400" />}
+                  <span className="text-[11px] hidden sm:inline max-w-[140px] truncate">
+                    {isListening ? 'Live ON' : activeMicLabel}
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    loadDevices();
+                    setIsMicMenuOpen(!isMicMenuOpen);
+                  }}
+                  className="px-1.5 py-1.5 rounded-r-lg border-l border-white/[0.08] text-slate-400 hover:text-white hover:bg-white/[0.06] transition-all"
+                  title="Select Microphone Input Device"
+                >
+                  <ChevronDown className="w-3 h-3" />
+                </button>
+
+                {/* Microphone Device Picker Popover */}
+                {isMicMenuOpen && (
+                  <div className="absolute bottom-full left-0 mb-2 w-72 rounded-xl bg-[#0c0e18] border border-white/[0.12] shadow-2xl p-2 z-50 space-y-1">
+                    <div className="flex items-center justify-between px-2 py-1 border-b border-white/[0.06]">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        Select Microphone Input
+                      </span>
+                      <button
+                        type="button"
+                        onClick={loadDevices}
+                        className="p-1 rounded hover:bg-white/[0.06] text-slate-400 hover:text-white"
+                        title="Refresh Audio Devices"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                      </button>
+                    </div>
+                    {micDevices.length === 0 ? (
+                      <div className="px-2 py-2 text-[11px] text-slate-400">
+                        No microphones found. Click the Mic icon to grant browser permission.
+                      </div>
+                    ) : (
+                      <div className="max-h-48 overflow-y-auto space-y-0.5">
+                        {micDevices.map((dev) => {
+                          const isSelected = dev.deviceId === selectedMicId || (!selectedMicId && dev === micDevices[0]);
+                          return (
+                            <button
+                              key={dev.deviceId}
+                              type="button"
+                              onClick={() => {
+                                onSelectMic?.(dev.deviceId);
+                                setIsMicMenuOpen(false);
+                              }}
+                              className={`w-full px-2.5 py-1.5 rounded-lg text-left text-xs flex items-center justify-between gap-2 transition-all ${
+                                isSelected
+                                  ? 'bg-violet-600/20 text-white font-medium border border-violet-500/30'
+                                  : 'text-slate-300 hover:bg-white/[0.05] hover:text-white'
+                              }`}
+                            >
+                              <span className="truncate">{dev.label}</span>
+                              {isSelected && <Check className="w-3.5 h-3.5 text-violet-400 flex-shrink-0" />}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
             )}
 
             <button
               type="button"
               onClick={onToggleComputerUse}
-              className={`p-1.5 rounded-lg border transition-all ${
+              className={`px-2 py-1.5 rounded-lg border text-[11px] flex items-center gap-1.5 transition-all ${
                 computerUseEnabled
                   ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-300'
-                  : 'border-transparent text-slate-400 hover:text-white hover:bg-white/[0.05]'
+                  : 'border-white/[0.08] text-slate-400 hover:text-white hover:bg-white/[0.05]'
               }`}
-              title={computerUseEnabled ? "Computer Use Active" : "Enable Computer Use"}
+              title={computerUseEnabled ? 'Desktop Computer-Use Enabled' : 'Desktop Computer-Use Disabled'}
             >
-              <Monitor className="w-4 h-4" />
+              <Monitor className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Desktop Control</span>
             </button>
           </div>
 

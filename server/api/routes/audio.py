@@ -1,9 +1,12 @@
 """
-Dione AI — Audio & Dual-Model Gemini Live + Background Flash Routes
-====================================================================
-WebSocket and REST endpoints for real-time voice conversations using
-Gemini Live API as the low-latency Frontman and unified DioneEngine as
-the background OS automation & heavy-lifting core.
+Dione AI — Live Audio & Gemini 3.8 Extended Thinking + Backend Engine Bridge
+=============================================================================
+Full-duplex WebSocket & REST endpoints connecting:
+1. Gemini Live Native Audio Frontman (24kHz output / 16kHz input with user-selected Mic).
+2. `deep_think_gemini_3_8`: Invokes Gemini 3.8 Flash with Extended Thinking (`ThinkingConfig`)
+   when the user asks complex reasoning, math, coding, or architectural questions over voice.
+3. `execute_dione_action`: Invokes the backend `DioneEngine` (Computer-Use, Gmail, Calendar,
+   Drive, Photos, WhatsApp, Telegram, Slack, Instagram, Web Search, Filesystem) directly from voice!
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ from pydantic import BaseModel
 from loguru import logger
 
 from server.llm.gemini_live_orchestrator import get_live_flash_orchestrator
+from server.core.runtime.computer_use import list_audio_devices
 
 router = APIRouter()
 
@@ -27,7 +31,9 @@ router = APIRouter()
 class AIStudioConfigPayload(BaseModel):
     api_keys: Optional[List[str]] = None
     live_frontman_model: Optional[str] = "gemini-2.5-flash-native-audio-latest"
+    reasoning_model: Optional[str] = "gemini-3.8-flash"
     background_flash_model: Optional[str] = "gemini-3.5-flash-lite"
+    thinking_budget: Optional[int] = 8192
     voice_name: Optional[str] = "Aoede"
 
 
@@ -35,17 +41,24 @@ class BackgroundTaskPayload(BaseModel):
     goal: str
 
 
+@router.get("/devices")
+async def get_system_audio_devices():
+    """Return available system audio devices from host OS alongside WebRTC browser enumeration."""
+    try:
+        return list_audio_devices()
+    except Exception as e:
+        return {"input": [], "output": [], "note": str(e)}
+
+
 @router.post("/aistudio-config")
 async def update_aistudio_config(payload: AIStudioConfigPayload):
-    """
-    Configure Google AI Studio API keys and select the Gemini Live Frontman model
-    and Background Gemini Flash worker model.
-    """
     orch = get_live_flash_orchestrator()
     updated = orch.update_config(
         api_keys=payload.api_keys,
         live_model=payload.live_frontman_model,
+        reasoning_model=payload.reasoning_model,
         flash_model=payload.background_flash_model,
+        thinking_budget=payload.thinking_budget,
         voice_name=payload.voice_name,
     )
     return {"success": True, "config": updated}
@@ -53,11 +66,12 @@ async def update_aistudio_config(payload: AIStudioConfigPayload):
 
 @router.get("/aistudio-config")
 async def get_aistudio_config():
-    """Return current Dual-Model Gemini Live + Background Flash configuration."""
     orch = get_live_flash_orchestrator()
     return {
         "live_frontman_model": orch.config.live_frontman_model,
+        "reasoning_model": orch.config.reasoning_model,
         "background_flash_model": orch.config.background_flash_model,
+        "thinking_budget": orch.config.thinking_budget,
         "voice_name": orch.config.voice_name,
         "configured_keys_count": len(orch.key_pool.keys),
         "active_tasks": list(orch.task_results.values()),
@@ -66,10 +80,6 @@ async def get_aistudio_config():
 
 @router.post("/spawn-flash-task")
 async def spawn_background_flash_task(payload: BackgroundTaskPayload):
-    """
-    Non-blocking endpoint called by the Gemini Live Frontman (or UI)
-    to spawn a background task executed through the unified DioneEngine.
-    """
     orch = get_live_flash_orchestrator()
     task_id = await orch.spawn_background_task(payload.goal, is_voice_mode=True)
     return {
@@ -80,77 +90,19 @@ async def spawn_background_flash_task(payload: BackgroundTaskPayload):
     }
 
 
-@router.post("/transcribe")
-async def transcribe_audio(request: Request):
-    """Transcribe uploaded audio to text."""
-    body = await request.json()
-    audio_b64 = body.get("audio_base64", "")
-    mime_type = body.get("mime_type", "audio/wav")
-
-    if not audio_b64:
-        return {"error": "No audio data provided"}
-
-    try:
-        audio_bytes = base64.b64decode(audio_b64)
-    except Exception:
-        return {"error": "Invalid base64 audio data"}
-
-    if not hasattr(request.app.state, "audio") or not request.app.state.audio:
-        return {"error": "Audio not configured. Set GEMINI_API_KEY in .env"}
-
-    try:
-        audio = request.app.state.audio
-        ext = mime_type.split("/")[-1] if "/" in mime_type else "wav"
-        with tempfile.NamedTemporaryFile(suffix=f".{ext}", delete=False) as f:
-            f.write(audio_bytes)
-            temp_path = f.name
-
-        try:
-            text = await audio.transcribe(temp_path)
-            return {"text": text, "success": True}
-        finally:
-            if os.path.exists(temp_path):
-                os.unlink(temp_path)
-    except Exception as e:
-        logger.error(f"Transcription error: {e}")
-        return {"error": str(e), "success": False}
-
-
-@router.post("/tts")
-async def text_to_speech(request: Request):
-    """Convert text to speech audio."""
-    body = await request.json()
-    text = body.get("text", "")
-
-    if not text:
-        return {"error": "No text provided"}
-
-    if not hasattr(request.app.state, "audio") or not request.app.state.audio:
-        return {"error": "Audio not configured"}
-
-    try:
-        audio_bytes = await request.app.state.audio.text_to_speech(text)
-        if audio_bytes:
-            return {
-                "audio_base64": base64.b64encode(audio_bytes).decode(),
-                "mime_type": "audio/wav",
-                "success": True,
-            }
-        return {"error": "No audio generated", "success": False}
-    except Exception as e:
-        logger.error(f"TTS error: {e}")
-        return {"error": str(e), "success": False}
-
-
 @router.websocket("/live")
 async def audio_live_session(websocket: WebSocket):
     """
-    Full-Duplex Bidirectional WebSocket endpoint for Gemini Live Frontman.
-    Streams 16kHz PCM from browser mic -> Gemini Live API -> Streams 24kHz PCM back to browser speaker.
+    Full-Duplex Bidirectional WebSocket endpoint for Gemini Live Voice + Gemini 3.8 Extended Thinking
+    + DioneEngine Backend Tool Execution.
     """
     await websocket.accept()
-    logger.info("🎤 Gemini Live Neural Voice WebSocket connected")
+    logger.info("🎤 Gemini Live Voice + Extended Thinking WebSocket connected")
     orch = get_live_flash_orchestrator()
+
+    # Ensure orchestrator has the app's initialized engine & integrations
+    if hasattr(websocket.app.state, "engine") and websocket.app.state.engine:
+        orch.orchestrator.engine = websocket.app.state.engine
 
     api_key = (
         orch.key_pool.get_active_key()
@@ -158,7 +110,7 @@ async def audio_live_session(websocket: WebSocket):
         or os.getenv("GEMINI_API_KEY")
     )
     if not api_key:
-        await websocket.send_json({"type": "error", "message": "No Gemini API key available"})
+        await websocket.send_json({"type": "error", "message": "No Gemini API key configured in .env"})
         await websocket.close()
         return
 
@@ -166,115 +118,220 @@ async def audio_live_session(websocket: WebSocket):
     from google.genai import types
 
     client = genai.Client(api_key=api_key)
-    live_model = orch.config.live_frontman_model or "gemini-2.5-flash-native-audio-latest"
+    voice_name = websocket.query_params.get("voice") or orch.config.voice_name or "Aoede"
+
+    # Define the 2 bridge tools that connect Gemini Live to Gemini 3.8 Extended Thinking & DioneEngine
+    live_tools = [
+        types.Tool(
+            function_declarations=[
+                types.FunctionDeclaration(
+                    name="execute_dione_action",
+                    description=(
+                        "Execute any desktop computer-use action (launch app, click button, open browser, play YouTube video, inspect screen), "
+                        "local file/system operation, web search, or connected service action (Gmail, Google Calendar, Google Drive, "
+                        "Google Photos, WhatsApp, Telegram, Slack, Instagram) via the backend DioneEngine."
+                    ),
+                    parameters={
+                        "type": "OBJECT",
+                        "properties": {
+                            "goal": {
+                                "type": "STRING",
+                                "description": "Complete natural-language instruction of the action or workflow to execute.",
+                            }
+                        },
+                        "required": ["goal"],
+                    },
+                ),
+                types.FunctionDeclaration(
+                    name="deep_think_gemini_3_8",
+                    description=(
+                        "Invoke the backend Gemini 3.8 Flash model with Extended Thinking and Knowledge Graph access "
+                        "whenever the user asks a complex reasoning, coding, mathematical, analytical, or multi-step planning question."
+                    ),
+                    parameters={
+                        "type": "OBJECT",
+                        "properties": {
+                            "problem": {
+                                "type": "STRING",
+                                "description": "The complex question or problem requiring extended thinking and deep reasoning.",
+                            }
+                        },
+                        "required": ["problem"],
+                    },
+                ),
+            ]
+        )
+    ]
 
     cfg = types.LiveConnectConfig(
         response_modalities=["AUDIO"],
+        tools=live_tools,
         speech_config=types.SpeechConfig(
             voice_config=types.VoiceConfig(
                 prebuilt_voice_config=types.PrebuiltVoiceConfig(
-                    voice_name=orch.config.voice_name or "Aoede"
+                    voice_name=voice_name
                 )
             )
         ),
         system_instruction=types.Content(
             parts=[types.Part.from_text(
-                text="You are Dione, an executive, proactive, highly competent personal AI assistant (Jarvis persona). "
-                     "Speak with poise, warmth, and precision. Deliver answers formatted for fluid conversational speech: "
-                     "concise, refined, and completely free of markdown syntax or bullet asterisks."
+                text=(
+                    "You are Dione, an executive personal AI assistant (Jarvis persona) running on the user's Windows 11 workstation. "
+                    "Speak naturally, concisely, and warmly without markdown symbols. "
+                    "CRITICAL CAPABILITIES:\n"
+                    "1. Whenever the user asks you to DO something on their computer, browser, files, or services "
+                    "(e.g. open an app, play a video, click something, check/send email, check calendar, send a WhatsApp/Telegram/Slack message, search the web), "
+                    "IMMEDIATELY call `execute_dione_action(goal=...)` and then speak the result.\n"
+                    "2. Whenever the user asks a complex question that benefits from deeper reasoning, math, code architecture, or personal knowledge lookup, "
+                    "call `deep_think_gemini_3_8(problem=...)` and synthesize its answer naturally."
+                )
             )]
         ),
     )
 
-    try:
-        async with client.aio.live.connect(model=live_model, config=cfg) as live_session:
-            await websocket.send_json({
-                "type": "session_ready",
-                "model": live_model,
-                "voice": orch.config.voice_name,
-            })
+    live_candidates = [
+        orch.config.live_frontman_model,
+        "gemini-2.5-flash-native-audio-latest",
+        "gemini-2.0-flash-live-001",
+    ]
+    live_candidates = list(dict.fromkeys([m for m in live_candidates if m]))
 
-            # Task 1: Receive from Client Browser -> Send to Gemini Live
-            async def client_to_gemini():
-                try:
-                    while True:
-                        msg = await websocket.receive()
-                        if "bytes" in msg and msg["bytes"]:
-                            # Raw PCM 16kHz audio chunk from user microphone (filtered by client VAD)
-                            await live_session.send_realtime_input(
-                                media={"data": msg["bytes"], "mime_type": "audio/pcm;rate=16000"}
-                            )
-                        elif "text" in msg and msg["text"]:
-                            data = json.loads(msg["text"])
-                            mtype = data.get("type", "")
+    connected_session = None
+    last_err = None
+    for live_model in live_candidates:
+        try:
+            async with client.aio.live.connect(model=live_model, config=cfg) as live_session:
+                connected_session = True
+                await websocket.send_json({
+                    "type": "session_ready",
+                    "model": live_model,
+                    "reasoning_model": orch.config.reasoning_model,
+                    "voice": voice_name,
+                })
 
-                            if mtype == "text_prompt":
-                                prompt_text = data.get("text", "")
-                                await live_session.send_client_content(
-                                    turns=[types.Content(parts=[types.Part.from_text(text=prompt_text)])],
-                                    turn_complete=True,
+                async def client_to_gemini():
+                    try:
+                        while True:
+                            msg = await websocket.receive()
+                            if "bytes" in msg and msg["bytes"]:
+                                await live_session.send_realtime_input(
+                                    media={"data": msg["bytes"], "mime_type": "audio/pcm;rate=16000"}
                                 )
+                            elif "text" in msg and msg["text"]:
+                                data = json.loads(msg["text"])
+                                mtype = data.get("type", "")
 
-                            elif mtype == "wake_word":
-                                await live_session.send_client_content(
-                                    turns=[types.Content(parts=[types.Part.from_text(text="Sir, I am listening and at your command.")])],
-                                    turn_complete=True,
-                                )
-
-                            elif mtype == "end_of_turn":
-                                await live_session.send_client_content(turn_complete=True)
-
-                            elif mtype == "delegate_task":
-                                goal = data.get("goal", "")
-                                task_id = await orch.spawn_background_task(goal, is_voice_mode=True)
-                                await websocket.send_json({
-                                    "type": "task_spawned",
-                                    "task_id": task_id,
-                                    "message": f"Delegated '{goal}' to background execution core.",
-                                })
-                except WebSocketDisconnect:
-                    logger.info("🎤 Voice Client WebSocket disconnected.")
-                except asyncio.CancelledError:
-                    pass
-                except Exception as e:
-                    logger.error(f"Error in client_to_gemini voice bridge: {e}")
-
-            # Task 2: Receive from Gemini Live -> Stream to Client Browser
-            async def gemini_to_client():
-                try:
-                    async for response in live_session.receive():
-                        sc = response.server_content
-                        if sc and sc.model_turn:
-                            for part in sc.model_turn.parts:
-                                if part.inline_data and part.inline_data.data:
-                                    # Send raw 24kHz PCM audio frame to browser for low-latency playback
-                                    await websocket.send_bytes(part.inline_data.data)
-                                if part.text:
+                                if mtype == "text_prompt":
+                                    prompt_text = data.get("text", "")
+                                    await live_session.send_client_content(
+                                        turns=[types.Content(parts=[types.Part.from_text(text=prompt_text)])],
+                                        turn_complete=True,
+                                    )
+                                elif mtype == "end_of_turn":
+                                    await live_session.send_client_content(turn_complete=True)
+                                elif mtype == "delegate_task":
+                                    goal = data.get("goal", "")
+                                    task_id = await orch.spawn_background_task(goal, is_voice_mode=True)
                                     await websocket.send_json({
-                                        "type": "transcript",
-                                        "role": "model",
-                                        "text": part.text,
+                                        "type": "task_spawned",
+                                        "task_id": task_id,
+                                        "message": f"Delegated '{goal}' to background engine.",
                                     })
-                        if sc and sc.turn_complete:
-                            await websocket.send_json({"type": "turn_complete"})
-                except asyncio.CancelledError:
-                    pass
-                except Exception as e:
-                    logger.error(f"Error in gemini_to_client audio stream: {e}")
+                    except WebSocketDisconnect:
+                        logger.info("🎤 Voice Client WebSocket disconnected.")
+                    except asyncio.CancelledError:
+                        pass
+                    except Exception as e:
+                        logger.error(f"Error in client_to_gemini voice bridge: {e}")
 
-            t1 = asyncio.create_task(client_to_gemini())
-            t2 = asyncio.create_task(gemini_to_client())
+                async def gemini_to_client():
+                    try:
+                        async for response in live_session.receive():
+                            # 1. Handle Native Tool Calls from Gemini Live (Backend Engine & Gemini 3.8 Extended Thinking!)
+                            if getattr(response, "tool_call", None) and response.tool_call.function_calls:
+                                function_responses = []
+                                for fc in response.tool_call.function_calls:
+                                    fn_name = fc.name
+                                    fn_args = dict(fc.args or {})
+                                    logger.info(f"[GeminiLiveTool] Invoking {fn_name}({fn_args})")
+                                    await websocket.send_json({
+                                        "type": "status",
+                                        "text": (
+                                            f"Gemini 3.8 Extended Thinking: {fn_args.get('problem', '')[:45]}..."
+                                            if fn_name == "deep_think_gemini_3_8"
+                                            else f"Executing: {fn_args.get('goal', '')[:45]}..."
+                                        ),
+                                    })
 
-            done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
-            for p in pending:
-                p.cancel()
+                                    if fn_name == "deep_think_gemini_3_8":
+                                        res_dict = await orch.run_extended_thinking_query(
+                                            problem=str(fn_args.get("problem", ""))
+                                        )
+                                        if res_dict.get("thoughts"):
+                                            await websocket.send_json({
+                                                "type": "thought",
+                                                "model": res_dict.get("model", "gemini-3.8-flash"),
+                                                "text": res_dict["thoughts"],
+                                            })
+                                        tool_output = res_dict.get("answer", "")
+                                    elif fn_name == "execute_dione_action":
+                                        tool_output = await orch.execute_action_for_live_voice(
+                                            goal=str(fn_args.get("goal", ""))
+                                        )
+                                        await websocket.send_json({
+                                            "type": "transcript",
+                                            "role": "model",
+                                            "text": tool_output,
+                                        })
+                                    else:
+                                        tool_output = f"Unknown tool {fn_name}"
 
-    except Exception as live_err:
-        logger.error(f"Gemini Live session error: {live_err}")
+                                    function_responses.append(
+                                        types.FunctionResponse(
+                                            id=fc.id,
+                                            name=fn_name,
+                                            response={"result": str(tool_output)},
+                                        )
+                                    )
+
+                                if function_responses:
+                                    await live_session.send_tool_response(function_responses=function_responses)
+
+                            # 2. Stream Audio & Text Transcripts back to Browser
+                            sc = response.server_content
+                            if sc and sc.model_turn:
+                                for part in sc.model_turn.parts:
+                                    if part.inline_data and part.inline_data.data:
+                                        await websocket.send_bytes(part.inline_data.data)
+                                    if part.text:
+                                        await websocket.send_json({
+                                            "type": "transcript",
+                                            "role": "model",
+                                            "text": part.text,
+                                        })
+                            if sc and sc.turn_complete:
+                                await websocket.send_json({"type": "turn_complete"})
+                    except asyncio.CancelledError:
+                        pass
+                    except Exception as e:
+                        logger.error(f"Error in gemini_to_client audio stream: {e}")
+
+                t1 = asyncio.create_task(client_to_gemini())
+                t2 = asyncio.create_task(gemini_to_client())
+                done, pending = await asyncio.wait([t1, t2], return_when=asyncio.FIRST_COMPLETED)
+                for p in pending:
+                    p.cancel()
+                break
+        except Exception as live_err:
+            last_err = live_err
+            logger.warning(f"Gemini Live model {live_model} failed: {live_err}")
+            continue
+
+    if not connected_session and last_err:
         try:
             await websocket.send_json({
                 "type": "error",
-                "message": f"Gemini Live session error: {live_err}",
+                "message": f"Gemini Live connection failed: {last_err}",
             })
         except Exception:
             pass

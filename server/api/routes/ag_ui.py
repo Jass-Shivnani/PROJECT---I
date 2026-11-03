@@ -320,15 +320,11 @@ async def run_ag_ui_agent(input_data: AgUiRunInput, request: Request):
             "role": "assistant",
         })
 
-        words = final_text.split(" ")
-        for i in range(0, len(words), 4):
-            chunk = " ".join(words[i:i + 4]) + (" " if i + 4 < len(words) else "")
-            yield _sse({
-                "type": "TEXT_MESSAGE_CONTENT",
-                "messageId": message_id,
-                "delta": chunk,
-            })
-            await asyncio.sleep(0.015)
+        yield _sse({
+            "type": "TEXT_MESSAGE_CONTENT",
+            "messageId": message_id,
+            "delta": final_text,
+        })
 
         yield _sse({
             "type": "TEXT_MESSAGE_END",

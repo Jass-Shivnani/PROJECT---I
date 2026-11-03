@@ -23,6 +23,8 @@ import {
   fetchWhatsAppQr
 } from '../services/api';
 
+import { NeuralAudioClient, AudioDeviceOption } from '../services/neuralAudio';
+
 interface SettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -32,6 +34,10 @@ interface SettingsModalProps {
   onToggleTurbo: () => void;
   onClearAllThreads: () => void;
   threadCount: number;
+  selectedMicId?: string;
+  onSelectMic?: (deviceId: string) => void;
+  selectedSpeakerId?: string;
+  onSelectSpeaker?: (deviceId: string) => void;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
@@ -43,8 +49,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   onToggleTurbo,
   onClearAllThreads,
   threadCount,
+  selectedMicId = '',
+  onSelectMic,
+  selectedSpeakerId = '',
+  onSelectSpeaker,
 }) => {
   const [activeTab, setActiveTab] = useState<'models' | 'integrations' | 'safety' | 'voice' | 'storage'>('models');
+  const [micDevices, setMicDevices] = useState<AudioDeviceOption[]>([]);
+  const [speakerDevices, setSpeakerDevices] = useState<AudioDeviceOption[]>([]);
+  const [voiceName, setVoiceName] = useState('Aoede');
+  const [thinkingBudget, setThinkingBudget] = useState(8192);
+
+  const loadAudioDevices = async () => {
+    const { inputs, outputs } = await NeuralAudioClient.getAudioDevices();
+    setMicDevices(inputs);
+    setSpeakerDevices(outputs);
+  };
+
+  useEffect(() => {
+    if (isOpen && activeTab === 'voice') {
+      loadAudioDevices();
+    }
+  }, [isOpen, activeTab]);
   const [integrationsData, setIntegrationsData] = useState<any>({ total: 8, connected: 0, integrations: [] });
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [busyService, setBusyService] = useState<string>('');
@@ -559,12 +585,119 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             )}
 
             {activeTab === 'voice' && (
-              <div className="space-y-3 text-xs text-slate-300">
-                <div className="p-4 rounded-xl bg-white/[0.03] border border-white/[0.08] space-y-1">
-                  <div className="font-bold text-white">Gemini Live Native Audio Frontman (Aoede 24kHz)</div>
+              <div className="space-y-4 text-xs text-slate-300">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-300">
+                      Hardware Audio Devices & Gemini Live + 3.8 Extended Thinking
+                    </h3>
+                    <p className="text-[11px] text-slate-400 mt-0.5">
+                      Choose your exact microphone and speaker, and configure the Gemini 3.8 Extended Thinking reasoning core.
+                    </p>
+                  </div>
+                  <button
+                    onClick={loadAudioDevices}
+                    className="p-2 rounded-xl bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.08] text-slate-300"
+                    title="Rescan Microphones & Speakers"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+
+                {/* Microphone Input Selector */}
+                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.08] space-y-2">
+                  <label className="text-xs font-bold text-white block">
+                    Microphone Input Device
+                  </label>
+                  <select
+                    value={selectedMicId}
+                    onChange={(e) => onSelectMic?.(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-black/50 border border-white/15 text-xs text-white focus:outline-none focus:border-violet-500"
+                  >
+                    <option value="">System Default Microphone</option>
+                    {micDevices.map((d) => (
+                      <option key={d.deviceId} value={d.deviceId}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Speaker Output Selector */}
+                <div className="p-4 rounded-xl bg-white/[0.02] border border-white/[0.08] space-y-2">
+                  <label className="text-xs font-bold text-white block">
+                    Speaker / Headphone Output
+                  </label>
+                  <select
+                    value={selectedSpeakerId}
+                    onChange={(e) => onSelectSpeaker?.(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl bg-black/50 border border-white/15 text-xs text-white focus:outline-none focus:border-violet-500"
+                  >
+                    <option value="">System Default Speaker</option>
+                    {speakerDevices.map((d) => (
+                      <option key={d.deviceId} value={d.deviceId}>
+                        {d.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Gemini Live + 3.8 Extended Thinking Configuration */}
+                <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-500/10 via-violet-500/5 to-transparent border border-emerald-500/30 space-y-3">
+                  <div className="font-bold text-white flex items-center justify-between">
+                    <span>Gemini Live + 3.8 Extended Thinking Bridge</span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-mono">
+                      Connected to DioneEngine
+                    </span>
+                  </div>
                   <p className="text-[11px] text-slate-400">
-                    Full-duplex low-latency voice conversation with background task handoff to DioneEngine.
+                    Live voice connects directly to `execute_dione_action` (all 42 OS & service tools) and `deep_think_gemini_3_8` (Gemini 3.8 Flash with Extended Thinking).
                   </p>
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="text-[10px] uppercase font-mono text-slate-400 block mb-1">Voice Persona</label>
+                      <select
+                        value={voiceName}
+                        onChange={(e) => setVoiceName(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded-lg bg-black/50 border border-white/10 text-xs text-white"
+                      >
+                        <option value="Aoede">Aoede (Warm Executive)</option>
+                        <option value="Puck">Puck (Crisp Technical)</option>
+                        <option value="Charon">Charon (Calm Deep)</option>
+                        <option value="Kore">Kore (Clear Neutral)</option>
+                        <option value="Fenrir">Fenrir (Authoritative)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] uppercase font-mono text-slate-400 block mb-1">3.8 Extended Thinking Budget</label>
+                      <select
+                        value={thinkingBudget}
+                        onChange={(e) => setThinkingBudget(Number(e.target.value))}
+                        className="w-full px-3 py-1.5 rounded-lg bg-black/50 border border-white/10 text-xs text-white font-mono"
+                      >
+                        <option value={4096}>4,096 tokens (Fast Deep Think)</option>
+                        <option value={8192}>8,192 tokens (Balanced Deep Think)</option>
+                        <option value={16384}>16,384 tokens (Maximum Reasoning)</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      await fetch('/api/audio/aistudio-config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          reasoning_model: 'gemini-3.8-flash',
+                          thinking_budget: thinkingBudget,
+                          voice_name: voiceName,
+                        }),
+                      });
+                      setStatusMessage(`Saved Voice (${voiceName}) & Gemini 3.8 Extended Thinking (${thinkingBudget} tokens)`);
+                    }}
+                    className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-all"
+                  >
+                    Save Live Audio & Thinking Config
+                  </button>
                 </div>
               </div>
             )}

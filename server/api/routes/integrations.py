@@ -27,7 +27,6 @@ class IntegrationToolRequest(BaseModel):
 
 
 @router.get("/")
-@router.get("")
 async def list_integrations(request: Request):
     integrations = getattr(request.app.state, "integrations", None)
     if not integrations:
