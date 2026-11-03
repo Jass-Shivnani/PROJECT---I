@@ -15,10 +15,25 @@ Usage:
     python -m server.main --reload         # Dev mode with hot reload
 """
 
+import sys
 import typer
 import uvicorn
 from loguru import logger
 from pathlib import Path
+
+# Ensure UTF-8 output and stable asyncio event loop on Windows
+if sys.platform == "win32":
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
+    try:
+        import asyncio
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    except Exception:
+        pass
 
 from server.config.settings import get_settings
 
@@ -48,9 +63,10 @@ def serve(
         rotation="10 MB",
         retention="7 days",
         level=log_level.upper(),
+        encoding="utf-8",
     )
     logger.add(
-        lambda msg: print(msg, end=""),
+        sys.stderr,
         level=log_level.upper(),
         colorize=True,
     )
@@ -61,6 +77,8 @@ def serve(
 
     logger.info(f"Starting Dione AI on {_host}:{_port}")
 
+    loop_type = "asyncio:SelectorEventLoop" if sys.platform == "win32" else "auto"
+
     uvicorn.run(
         "server.api.app:create_app",
         factory=True,
@@ -68,6 +86,7 @@ def serve(
         port=_port,
         reload=reload,
         log_level=log_level,
+        loop=loop_type,
         ws_ping_interval=30,
         ws_ping_timeout=10,
     )
@@ -94,9 +113,9 @@ def check():
     for name, module in checks.items():
         try:
             importlib.import_module(module)
-            typer.echo(f"  ✓ {name}")
+            typer.echo(f"  [OK] {name}")
         except ImportError:
-            typer.echo(f"  ✗ {name} — NOT INSTALLED")
+            typer.echo(f"  [MISSING] {name} - NOT INSTALLED")
             all_ok = False
 
     # Check Ollama
@@ -111,10 +130,9 @@ def check():
 
     ollama_ok = asyncio.run(_check_ollama())
     if ollama_ok:
-        typer.echo("  ✓ Ollama server")
+        typer.echo("  [OK] Ollama server")
     else:
-        typer.echo("  ✗ Ollama server — NOT RUNNING (start with: ollama serve)")
-        all_ok = False
+        typer.echo("  [OPTIONAL] Ollama server - NOT RUNNING (start with: ollama serve if using offline models)")
 
     if all_ok:
         typer.echo("\n  All checks passed! Run: python -m server.main serve")

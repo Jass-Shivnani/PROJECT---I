@@ -45,6 +45,7 @@ class EventType(str, Enum):
     TOOL_COMPLETED = "tool_completed"
     COMPUTER_USE_ACTION = "computer_use_action"
     SCREENSHOT_CAPTURED = "screenshot_captured"
+    DESKTOP_CAPTURED = "desktop_captured"
 
     # Safety Kernel Lattice
     SAFETY_APPROVAL_REQUEST = "safety_approval_request"
@@ -140,6 +141,12 @@ class AsyncEventBus:
                 self._event_history.pop(0)
 
         # Handle emergency stop state
+        if not hasattr(self, "_loop") or not self._loop or self._loop.is_closed():
+            try:
+                self._loop = asyncio.get_running_loop()
+            except RuntimeError:
+                pass
+
         if event.event_type == EventType.EMERGENCY_STOP:
             self._emergency_stopped = True
             self.set_state(AgentState.PAUSED, reason=event.payload.get("reason", "Emergency stop"))
@@ -162,17 +169,23 @@ class AsyncEventBus:
             logger.error(f"[EventBus] Handler {getattr(handler, '__name__', str(handler))} failed on {event.event_type}: {e}")
 
     def trigger_emergency_stop(self, reason: str = "User fail-safe triggered"):
-        """Synchronously dispatch emergency stop."""
+        """Synchronously and cross-thread dispatch emergency stop."""
         logger.warning(f"[EventBus] 🚨 EMERGENCY STOP: {reason}")
-        asyncio.create_task(
-            self.publish(
-                RuntimeEvent(
-                    event_type=EventType.EMERGENCY_STOP,
-                    payload={"reason": reason},
-                    sender="fail_safe",
-                )
-            )
+        self._emergency_stopped = True
+        self._state = AgentState.PAUSED
+        event = RuntimeEvent(
+            event_type=EventType.EMERGENCY_STOP,
+            payload={"reason": reason},
+            sender="fail_safe",
         )
+        try:
+            loop = asyncio.get_running_loop()
+            loop.create_task(self.publish(event))
+        except RuntimeError:
+            if hasattr(self, "_loop") and self._loop and self._loop.is_running():
+                asyncio.run_coroutine_threadsafe(self.publish(event), self._loop)
+            else:
+                pass
 
 
 # Global singleton instance

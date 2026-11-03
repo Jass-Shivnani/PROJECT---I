@@ -2,27 +2,26 @@
 Dione AI — Gemini LLM Backend
 
 Connects to Google's Gemini API for inference.
-Requires a GEMINI_API_KEY environment variable.
-
-pip install google-generativeai
+Supports native Tool/Function Calling via google-genai SDK,
+multimodal vision analysis, token streaming, and resilient fallback candidates.
 """
 
 import time
 import asyncio
-from typing import AsyncGenerator
+import uuid
+from typing import AsyncGenerator, Optional, List, Dict, Any, Union
 from loguru import logger
 
-from server.llm.adapter import BaseLLMAdapter, LLMRequest, LLMResponse
+from server.llm.adapter import BaseLLMAdapter, LLMRequest, LLMResponse, LLMMessage
 
 
 class GeminiAdapter(BaseLLMAdapter):
     """
-    LLM adapter for Google Gemini API.
-
-    Supports Gemini 2.0 Flash, Gemini 1.5 Pro, etc.
+    LLM adapter for Google Gemini API with native Function Calling.
+    Supports Gemini 3.5 Flash-Lite, Gemini 3 Flash Preview, and Fallback models.
     """
 
-    def __init__(self, api_key: str, model: str = "gemini-2.0-flash"):
+    def __init__(self, api_key: str, model: str = "gemini-3.5-flash-lite"):
         self.api_key = api_key
         self.model = model
         self._client = None
@@ -46,8 +45,46 @@ class GeminiAdapter(BaseLLMAdapter):
                 "Install with: pip install google-genai"
             )
 
-    async def generate(self, request: LLMRequest) -> LLMResponse:
-        """Generate a complete response using Gemini."""
+    def _convert_tools(self, tools: Optional[List[Dict[str, Any]]]):
+        """Convert standard JSON schemas into google-genai types.Tool."""
+        if not tools:
+            return None
+        from google.genai import types
+
+        function_declarations = []
+        for t in tools:
+            name = t.get("name", "")
+            description = t.get("description", "")
+            parameters = t.get("parameters", {})
+            if not name:
+                continue
+
+            # Ensure valid parameters structure
+            if not isinstance(parameters, dict) or not parameters:
+                parameters = {
+                    "type": "OBJECT",
+                    "properties": {},
+                }
+
+            try:
+                fd = types.FunctionDeclaration(
+                    name=name,
+                    description=description,
+                    parameters=parameters,
+                )
+                function_declarations.append(fd)
+            except Exception as e:
+                logger.warning(f"Failed to create FunctionDeclaration for {name}: {e}")
+
+        if not function_declarations:
+            return None
+
+        return [types.Tool(function_declarations=function_declarations)]
+
+    async def generate(self, request: Union[LLMRequest, str]) -> LLMResponse:
+        """Generate a complete response using Gemini with native function calling."""
+        if isinstance(request, str):
+            request = LLMRequest(messages=[LLMMessage(role="user", content=request)])
         self._ensure_client()
         start = time.monotonic()
 
@@ -63,18 +100,20 @@ class GeminiAdapter(BaseLLMAdapter):
 
         from google.genai import types
 
+        genai_tools = self._convert_tools(request.tools)
+
         config = types.GenerateContentConfig(
             temperature=request.temperature,
             max_output_tokens=request.max_tokens,
+            tools=genai_tools,
         )
         if system_instruction:
             config.system_instruction = system_instruction
-        if request.json_mode:
+        if request.json_mode and not genai_tools:
             config.response_mime_type = "application/json"
 
         # Model candidates with automatic fallback
-        candidates = [self.model, "gemini-3-flash-preview", "gemini-flash-latest", "gemini-3.8-flash", "gemini-3.5-flash-lite"]
-        # Deduplicate preserving order
+        candidates = [self.model, "gemini-3.5-flash-lite", "gemini-3-flash-preview", "gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash"]
         candidates = list(dict.fromkeys(candidates))
 
         last_error = None
@@ -89,6 +128,26 @@ class GeminiAdapter(BaseLLMAdapter):
                     latency = (time.monotonic() - start) * 1000
                     content = response.text or ""
                     usage = response.usage_metadata
+
+                    # Parse native function calls if emitted by the model
+                    tool_calls = []
+                    if hasattr(response, "function_calls") and response.function_calls:
+                        for fc in response.function_calls:
+                            fc_name = getattr(fc, "name", "")
+                            fc_args = getattr(fc, "args", {})
+                            if isinstance(fc_args, dict):
+                                clean_args = dict(fc_args)
+                            elif hasattr(fc_args, "model_dump"):
+                                clean_args = fc_args.model_dump()
+                            else:
+                                clean_args = dict(fc_args) if fc_args else {}
+
+                            tool_calls.append({
+                                "id": f"call_{uuid.uuid4().hex[:8]}",
+                                "name": fc_name,
+                                "args": clean_args,
+                            })
+
                     return LLMResponse(
                         content=content,
                         model=candidate,
@@ -97,19 +156,19 @@ class GeminiAdapter(BaseLLMAdapter):
                         total_tokens=getattr(usage, "total_token_count", 0) if usage else 0,
                         finish_reason="stop",
                         latency_ms=latency,
+                        tool_calls=tool_calls,
                     )
                 except Exception as e:
                     last_error = e
                     err_str = str(e)
                     is_transient = any(code in err_str for code in ["503", "UNAVAILABLE", "429", "RESOURCE_EXHAUSTED", "DeadlineExceeded"])
-                    if is_transient and attempt < 3:
-                        wait = 5.0 * attempt
-                        logger.warning(f"Gemini {candidate} transient error ({err_str[:80]}), retrying in {wait:.1f}s (attempt {attempt}/3)")
-                        await asyncio.sleep(wait)
+                    if is_transient and attempt < 2:
+                        logger.warning(f"Gemini {candidate} transient ({err_str[:60]}), quick retry in 0.5s...")
+                        await asyncio.sleep(0.5)
                         continue
                     else:
-                        logger.warning(f"Gemini model {candidate} attempt {attempt} failed: {err_str[:120]}")
-                        break  # Try next candidate model
+                        logger.warning(f"Gemini {candidate} failed: {err_str[:100]}. Switching to next candidate model...")
+                        break
 
         logger.error(f"All Gemini candidates failed. Last error: {last_error}")
         raise last_error
@@ -117,7 +176,6 @@ class GeminiAdapter(BaseLLMAdapter):
     async def stream(self, request: LLMRequest) -> AsyncGenerator[str, None]:
         """Stream tokens from Gemini."""
         self._ensure_client()
-
         contents = self._build_contents(request.messages)
 
         system_instruction = None
@@ -135,13 +193,7 @@ class GeminiAdapter(BaseLLMAdapter):
         if system_instruction:
             config.system_instruction = system_instruction
 
-        candidates = [self.model]
-        if "gemini-3.8-flash" in self.model:
-            candidates.append("gemini-3.5-flash")
-        elif "gemini-3.5-flash" in self.model:
-            candidates.append("gemini-3.8-flash")
-        else:
-            candidates.extend(["gemini-3.8-flash", "gemini-3.5-flash"])
+        candidates = [self.model, "gemini-3.5-flash-lite", "gemini-3-flash-preview", "gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash"]
         candidates = list(dict.fromkeys(candidates))
 
         last_error = None
@@ -165,27 +217,53 @@ class GeminiAdapter(BaseLLMAdapter):
         raise last_error
 
     def _build_contents(self, messages) -> list:
-        """Convert LLMMessages to Gemini content format."""
+        """Convert LLMMessages to Gemini content format with native function calling support."""
+        from google.genai import types
         contents = []
         for msg in messages:
             if msg.role == "system":
                 continue  # Handled via system_instruction
-            role = "user" if msg.role == "user" else "model"
-            contents.append({"role": role, "parts": [{"text": msg.content}]})
+
+            if msg.role in ("tool", "function"):
+                tool_name = msg.name or "tool_result"
+                res_payload = {"result": msg.content} if isinstance(msg.content, str) else (msg.content or {})
+                contents.append(types.Content(
+                    role="user",
+                    parts=[types.Part.from_function_response(name=tool_name, response=res_payload)]
+                ))
+            elif getattr(msg, "tool_calls", None):
+                parts = []
+                if msg.content:
+                    parts.append(types.Part.from_text(text=msg.content))
+                for tc in msg.tool_calls:
+                    parts.append(types.Part.from_function_call(name=tc["name"], args=tc.get("args", {})))
+                contents.append(types.Content(role="model", parts=parts))
+            else:
+                role = "user" if msg.role == "user" else "model"
+                contents.append(types.Content(
+                    role=role,
+                    parts=[types.Part.from_text(text=msg.content or " ")]
+                ))
         return contents
 
     async def health_check(self) -> bool:
-        """Check if Gemini API is reachable."""
+        """Check if Gemini API is reachable across candidate models."""
         try:
             self._ensure_client()
-            # Quick test with minimal prompt
             from google.genai import types
-            response = self._client.models.generate_content(
-                model=self.model,
-                contents="Say hi",
-                config=types.GenerateContentConfig(max_output_tokens=5),
-            )
-            return response.text is not None
+            candidates = [self.model, "gemini-3.5-flash-lite", "gemini-3-flash-preview", "gemini-3.1-flash-lite"]
+            for cand in list(dict.fromkeys(candidates)):
+                try:
+                    response = self._client.models.generate_content(
+                        model=cand,
+                        contents="Say hi",
+                        config=types.GenerateContentConfig(max_output_tokens=5),
+                    )
+                    if response.text is not None:
+                        return True
+                except Exception:
+                    continue
+            return False
         except Exception as e:
             logger.error(f"Gemini health check failed: {e}")
             return False
@@ -205,10 +283,11 @@ class GeminiAdapter(BaseLLMAdapter):
             "model": self.model,
             "provider": "google-gemini",
             "type": "cloud",
+            "native_function_calling": True,
         }
 
-    async def generate_vision(self, prompt: str, image_bytes: bytes, json_mode: bool = False) -> str:
-        """Generate response given an image and prompt using multimodal Gemini."""
+    async def generate_vision(self, prompt: str, image_bytes: bytes | list[bytes], json_mode: bool = False) -> str:
+        """Generate response given one or multiple images and prompt using multimodal Gemini."""
         self._ensure_client()
         from google.genai import types
 
@@ -219,12 +298,20 @@ class GeminiAdapter(BaseLLMAdapter):
         if json_mode:
             config.response_mime_type = "application/json"
 
-        image_part = types.Part.from_bytes(
-            data=image_bytes,
-            mime_type="image/png",
-        )
+        if isinstance(image_bytes, list):
+            image_parts = [
+                types.Part.from_bytes(data=img, mime_type="image/png")
+                for img in image_bytes
+            ]
+            contents = [prompt, *image_parts]
+        else:
+            image_part = types.Part.from_bytes(
+                data=image_bytes,
+                mime_type="image/png",
+            )
+            contents = [prompt, image_part]
 
-        candidates = [self.model, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+        candidates = [self.model, "gemini-3.5-flash-lite", "gemini-3-flash-preview", "gemini-3.1-flash-lite", "gemini-flash-lite-latest", "gemini-3.5-flash"]
         candidates = list(dict.fromkeys(candidates))
 
         last_error = None
@@ -232,7 +319,7 @@ class GeminiAdapter(BaseLLMAdapter):
             try:
                 response = self._client.models.generate_content(
                     model=candidate,
-                    contents=[prompt, image_part],
+                    contents=contents,
                     config=config,
                 )
                 return response.text or ""

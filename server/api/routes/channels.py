@@ -35,7 +35,6 @@ async def whatsapp_inbound(payload: WhatsAppInboundRequest, request: Request):
     if not incoming_text:
         return {"ok": True, "reply": ""}
 
-    await memory.add_turn("user", incoming_text)
 
     if hasattr(request.app.state, "heartbeat"):
         request.app.state.heartbeat.record_user_activity()
@@ -54,7 +53,8 @@ async def whatsapp_inbound(payload: WhatsAppInboundRequest, request: Request):
         f"User: {incoming_text}"
     )
 
-    async for step in engine.process_message(channel_context_message):
+    conv_id = f"whatsapp_{payload.chat_id or payload.sender_id or 'default'}"
+    async for step in engine.process_message(channel_context_message, conversation_id=conv_id):
         if step.state in (EngineState.COMPLETE, EngineState.ERROR) and step.final_answer:
             final_response = step.final_answer
 

@@ -18,14 +18,19 @@ router = APIRouter()
 @router.get("/health")
 async def health_check(request: Request):
     """Basic health check."""
-    llm = request.app.state.llm
-    llm_healthy = await llm.health_check()
+    llm = getattr(request.app.state, "llm", None)
+    llm_healthy = True
+    if llm and hasattr(llm, "health_check"):
+        try:
+            llm_healthy = await llm.health_check()
+        except Exception:
+            llm_healthy = False
 
     return {
         "status": "healthy" if llm_healthy else "degraded",
         "timestamp": datetime.now().isoformat(),
         "components": {
-            "llm": "up" if llm_healthy else "down",
+            "llm": "up" if llm_healthy else "degraded",
             "engine": "up",
             "api": "up",
         },

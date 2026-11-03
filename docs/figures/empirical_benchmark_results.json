@@ -1,27 +1,27 @@
 {
-  "benchmark_timestamp": "2026-08-31T15:52:39Z",
+  "benchmark_timestamp": "2026-10-31T12:54:07Z",
   "hardware_environment": {
     "os": "Windows 11 (10.0.26340)",
     "cpu": "Intel64 Family 6 Model 141 Stepping 1, GenuineIntel",
     "cpu_cores_physical": 8,
     "cpu_cores_logical": 8,
-    "total_ram_gb": 15.78,
+    "total_ram_gb": 15.76,
     "python_version": "3.12.10"
   },
   "process_memory_footprint": {
-    "server_pid": 16828,
-    "server_rss_ram_mb": 463.11,
-    "server_cpu_percent": 14.3,
-    "runner_rss_ram_mb": 39.47
+    "server_pid": 10036,
+    "server_rss_ram_mb": 538.79,
+    "server_cpu_percent": 0.0,
+    "runner_rss_ram_mb": 39.29
   },
   "knowledge_graph_microbenchmark": {
     "node_count": 150,
     "edge_count": 400,
     "queries_evaluated": 100,
-    "avg_latency_ms": 1.158,
-    "min_latency_ms": 0.964,
-    "max_latency_ms": 2.666,
-    "p95_latency_ms": 1.576
+    "avg_latency_ms": 1.375,
+    "min_latency_ms": 1.116,
+    "max_latency_ms": 2.43,
+    "p95_latency_ms": 1.658
   },
   "live_chat_and_react_tests": [
     {
@@ -30,10 +30,15 @@
       "prompt": "Hello Dione! Give a one-sentence greeting with your name.",
       "status_code": 200,
       "success": true,
-      "e2e_latency_ms": 20185.8,
-      "server_latency_ms": 20172.0,
-      "response_length_chars": 35,
-      "tools_used": [],
+      "e2e_latency_ms": 4619.7,
+      "server_latency_ms": 4625.0,
+      "response_length_chars": 95,
+      "tools_used": [
+        "SAFE:validate_tier_policy",
+        "SAFE:validate_tier_policy",
+        "KG-SOC:allocate_knapsack_context",
+        "ORCH:synthesize_blackboard"
+      ],
       "mood": "balanced"
     },
     {
@@ -42,10 +47,15 @@
       "prompt": "Calculate 48 * 125 + 350 and respond with only the result number.",
       "status_code": 200,
       "success": true,
-      "e2e_latency_ms": 11825.4,
-      "server_latency_ms": 11812.0,
+      "e2e_latency_ms": 6294.8,
+      "server_latency_ms": 6297.0,
       "response_length_chars": 4,
-      "tools_used": [],
+      "tools_used": [
+        "SAFE:validate_tier_policy",
+        "SAFE:validate_tier_policy",
+        "SYS-DB:system_execute_command",
+        "ORCH:synthesize_blackboard"
+      ],
       "mood": "balanced"
     },
     {
@@ -54,15 +64,16 @@
       "prompt": "List the files currently inside the docs folder and summarize their names.",
       "status_code": 200,
       "success": true,
-      "e2e_latency_ms": 113762.6,
-      "server_latency_ms": 113766.0,
-      "response_length_chars": 106,
+      "e2e_latency_ms": 8960.9,
+      "server_latency_ms": 8953.0,
+      "response_length_chars": 2617,
       "tools_used": [
-        "",
-        "",
-        ""
+        "SAFE:validate_tier_policy",
+        "SAFE:validate_tier_policy",
+        "SYS-DB:filesystem_list_directory",
+        "ORCH:synthesize_blackboard"
       ],
-      "mood": "curious"
+      "mood": "balanced"
     },
     {
       "id": "T4_AFFECTIVE",
@@ -70,11 +81,15 @@
       "prompt": "I am feeling extremely stressed about our final submission deadline tomorrow!",
       "status_code": 200,
       "success": true,
-      "e2e_latency_ms": 17575.5,
-      "server_latency_ms": 17578.0,
-      "response_length_chars": 211,
-      "tools_used": [],
-      "mood": "curious"
+      "e2e_latency_ms": 22115.0,
+      "server_latency_ms": 22094.0,
+      "response_length_chars": 490,
+      "tools_used": [
+        "SAFE:validate_tier_policy",
+        "KG-SOC:allocate_knapsack_context",
+        "ORCH:synthesize_blackboard"
+      ],
+      "mood": "balanced"
     },
     {
       "id": "T5_MULTI_STEP",
@@ -82,14 +97,17 @@
       "prompt": "Check the current time, check available channels, and give me a status summary.",
       "status_code": 200,
       "success": true,
-      "e2e_latency_ms": 60245.8,
-      "server_latency_ms": 60250.0,
-      "response_length_chars": 327,
+      "e2e_latency_ms": 7043.4,
+      "server_latency_ms": 7031.0,
+      "response_length_chars": 623,
       "tools_used": [
-        "",
-        ""
+        "SAFE:validate_tier_policy",
+        "SAFE:validate_tier_policy",
+        "SYS-DB:system_hardware_telemetry",
+        "CU-OS:computer_list_audio_devices",
+        "ORCH:synthesize_blackboard"
       ],
-      "mood": "curious"
+      "mood": "balanced"
     }
   ],
   "published_peer_reviewed_baselines": {

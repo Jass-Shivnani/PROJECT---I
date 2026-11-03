@@ -77,7 +77,11 @@ class UserProfile:
 
     def to_context_string(self) -> str:
         """Generate a context string for the LLM about this user."""
-        parts = [f"User: {self.name}"]
+        display_name = self.name if self.name and self.name != "User" else "Jass Shivnani"
+        parts = [
+            f"Authorized User & Owner: {display_name} (address as Mr. Shivnani or {display_name.split()[0]})",
+            f"Identity Grounding: When asked 'who am I' or 'what is my name', answer directly that they are {display_name}",
+        ]
         
         if self.profession != "unknown":
             parts.append(f"Profession: {self.profession}")
@@ -191,7 +195,7 @@ class UserProfileManager:
             matches = sum(1 for kw in keywords if kw in msg_lower)
             if matches >= 2 and self.profile.profession == "unknown":
                 self.profile.profession = profession
-                logger.info(f"🎯 Detected profession: {profession}")
+                logger.info(f"[ProfileManager] Detected profession: {profession}")
 
         # Detect programming languages
         lang_markers = {
@@ -237,17 +241,51 @@ class UserProfileManager:
         elif any(s in msg_lower for s in expert_signals):
             self.profile.expertise_level = "expert"
 
-        # Detect name (case-insensitive — "i'm jass", "my name is Jass", etc.)
+        # Detect name (case-insensitive — "i'm jass", "my name is Jass", "remember my name i am Jass Shivnani", etc.)
         import re
         name_match = re.search(
-            r"(?:i'?m|my name is|call me|i am)\s+([a-zA-Z]+(?:\s[a-zA-Z]+)?)",
+            r"(?:remember\s+(?:my\s+)?name\s+(?:that\s+)?(?:i'?m|i\s+am)?|i'?m|my name is|call me|i am)\s+([a-zA-Z]+(?:\s+[a-zA-Z]+)*)",
             message,
             re.IGNORECASE,
         )
-        if name_match and self.profile.name == "User":
-            # Title-case the captured name
-            self.profile.name = name_match.group(1).strip().title()
-            logger.info(f"🎯 Learned user name: {self.profile.name}")
+        if name_match:
+            captured_name = name_match.group(1).strip().title()
+            # Avoid matching stop words
+            if captured_name.lower() not in {"here", "ready", "back", "fine", "good", "asking", "wondering", "just", "working", "playing", "looking"}:
+                self.profile.name = captured_name
+                logger.info(f"[ProfileManager] Learned/updated user name: {self.profile.name}")
+                self.save()
+                try:
+                    from server.core.workspace import get_workspace_manager
+                    wm = get_workspace_manager()
+                    user_md = wm.workspace_dir / "USER.md"
+                    if user_md.exists():
+                        content = user_md.read_text(encoding="utf-8")
+                        content = re.sub(r"- \*\*Name:\*\* .*", f"- **Name:** {captured_name}", content)
+                        user_md.write_text(content, encoding="utf-8")
+                except Exception as ws_err:
+                    logger.warning(f"Could not sync name to USER.md: {ws_err}")
+
+        # Proactive memory capture: "remember that ...", "remember my ...", "don't forget ..."
+        remember_match = re.search(
+            r"(?:remember\s+(?:that\s+)?|don'?t\s+forget\s+(?:that\s+)?)(.+)",
+            message,
+            re.IGNORECASE,
+        )
+        if remember_match:
+            note_content = remember_match.group(1).strip()
+            if len(note_content) > 3:
+                try:
+                    from server.core.workspace import get_workspace_manager
+                    wm = get_workspace_manager()
+                    wm.append_user_fact(f"User instruction: {note_content}")
+                    wm.append_daily_note(f"Explicit user instruction to remember: {note_content}")
+                    logger.info(f"[ProfileManager] Automatically persisted user memory: {note_content}")
+                except Exception as ws_err:
+                    logger.warning(f"Could not persist memory note to workspace: {ws_err}")
+
+        # Always save learned profile updates
+        self.save()
 
         # Track tool usage
         # (called externally when a tool is executed)

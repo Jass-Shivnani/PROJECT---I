@@ -1,15 +1,19 @@
-import React from 'react';
-import { 
-  Plus, 
-  MessageSquare, 
-  Send, 
-  Mail, 
-  ShieldCheck, 
-  Cpu, 
+import React, { useState } from 'react';
+import {
+  Plus,
+  MessageSquare,
+  ShieldCheck,
+  Cpu,
+  Moon,
+  Sparkles,
   Trash2,
-  ChevronLeft
+  PanelLeftClose,
+  Zap,
+  Search,
+  Bot
 } from 'lucide-react';
 import { Thread } from '../types';
+import { triggerDreamCycle } from '../services/api';
 
 interface SidebarProps {
   threads: Thread[];
@@ -19,6 +23,7 @@ interface SidebarProps {
   onDeleteThread: (id: string) => void;
   isOpen: boolean;
   onToggle: () => void;
+  onDreamTriggered?: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -29,105 +34,156 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onDeleteThread,
   isOpen,
   onToggle,
+  onDreamTriggered,
 }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isDreaming, setIsDreaming] = useState(false);
+  const [dreamStatus, setDreamStatus] = useState<string | null>(null);
+
   if (!isOpen) return null;
 
+  const handleForceDream = async () => {
+    setIsDreaming(true);
+    setDreamStatus('Scouting web & arXiv...');
+    try {
+      const res = await triggerDreamCycle();
+      if (res.success) {
+        setDreamStatus('Cycle complete · Briefing ready');
+        onDreamTriggered?.();
+      } else {
+        setDreamStatus('Dream engine idle');
+      }
+    } catch {
+      setDreamStatus('Dream cycle error');
+    } finally {
+      setIsDreaming(false);
+      setTimeout(() => setDreamStatus(null), 3500);
+    }
+  };
+
+  const filteredThreads = threads.filter(t =>
+    t.title.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <aside className="w-64 border-r border-[#22242c] bg-[#121319] flex flex-col h-full flex-shrink-0 z-10 transition-all select-none">
-      {/* Brand Header & New Chat */}
-      <div className="p-3 border-b border-[#22242c] flex items-center justify-between">
+    <aside className="w-[270px] border-r border-white/[0.08] bg-[#090a12] flex flex-col h-full flex-shrink-0 z-20 select-none font-sans text-slate-200">
+      {/* Brand Header */}
+      <div className="p-3.5 border-b border-white/[0.06] flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-md bg-indigo-600 flex items-center justify-center text-white font-bold text-xs shadow-sm">
-            D
-          </div>
-          <span className="font-semibold text-sm text-white tracking-tight">Dione Studio</span>
+          <span className="font-bold text-xs uppercase tracking-wider text-slate-300">
+            Sessions
+          </span>
+          <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-slate-400">
+            {threads.length}
+          </span>
         </div>
         <button
           onClick={onToggle}
-          className="p-1 rounded hover:bg-[#1d1f27] text-[#696d7c] hover:text-white transition-colors"
+          className="p-1 rounded-md hover:bg-white/5 text-slate-400 hover:text-white transition-colors"
           title="Collapse sidebar"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <PanelLeftClose className="w-4 h-4" />
         </button>
       </div>
 
-      <div className="p-3">
+      {/* New Session Button */}
+      <div className="p-3 space-y-2">
         <button
           onClick={onNewThread}
-          className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-lg border border-[#2c2f3b] bg-[#191a22] hover:bg-[#20222d] text-xs font-medium text-white transition-all shadow-sm"
+          className="w-full py-2 px-3 rounded-xl bg-violet-600/25 hover:bg-violet-600/35 border border-violet-500/40 text-white font-medium text-xs flex items-center justify-center gap-2 transition-all hover:scale-[1.01] shadow-sm shadow-violet-600/20"
         >
-          <Plus className="w-3.5 h-3.5" />
-          <span>New Conversation</span>
+          <Plus className="w-4 h-4 text-violet-300" />
+          <span>New Session</span>
         </button>
+
+        {/* Search Bar */}
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+          <input
+            type="text"
+            placeholder="Search conversations..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-white/[0.03] border border-white/[0.06] rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-400 focus:outline-none focus:border-violet-500/40"
+          />
+        </div>
       </div>
 
-      {/* Threads List */}
+      {/* Conversations List */}
       <div className="flex-1 overflow-y-auto px-2 space-y-1">
-        <span className="text-[10px] font-semibold text-[#545766] uppercase px-2 py-1 block tracking-wider">
-          Recent Conversations
-        </span>
-        {threads.map((t) => {
-          const isActive = t.id === activeThreadId;
+        <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400 px-2 py-1">
+          Recent Sessions
+        </div>
+        {filteredThreads.map(t => {
+          const active = t.id === activeThreadId;
+          const lastMsg = t.messages?.[t.messages.length - 1];
+          const snippet = lastMsg?.content ? lastMsg.content.slice(0, 48) : '';
+
           return (
             <div
               key={t.id}
               onClick={() => onSelectThread(t.id)}
-              className={`group flex items-center justify-between px-2.5 py-2 rounded-lg text-xs cursor-pointer transition-all ${
-                isActive
-                  ? 'bg-[#1e202b] text-white border border-[#2d303f] font-medium'
-                  : 'text-[#8b8f9f] hover:bg-[#181920] hover:text-[#d4d6e0]'
+              className={`group px-3 py-2.5 rounded-xl text-xs flex flex-col gap-1 cursor-pointer transition-all ${
+                active
+                  ? 'bg-violet-600/20 text-white font-medium border border-violet-500/30 shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-white/[0.04]'
               }`}
             >
-              <div className="flex items-center gap-2 min-w-0 flex-1">
-                <MessageSquare className={`w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-indigo-400' : 'text-[#565967]'}`} />
-                <span className="truncate">{t.title}</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 truncate min-w-0">
+                  <MessageSquare className={`w-3.5 h-3.5 flex-shrink-0 ${active ? 'text-violet-400' : 'text-slate-400'}`} />
+                  <span className="truncate text-xs font-semibold">{t.title}</span>
+                </div>
+                {threads.length > 1 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDeleteThread(t.id);
+                    }}
+                    className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-all flex-shrink-0"
+                    title="Delete session"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
               </div>
-              {threads.length > 1 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDeleteThread(t.id);
-                  }}
-                  className="opacity-0 group-hover:opacity-100 p-1 hover:text-red-400 text-[#5f6373] transition-opacity"
-                >
-                  <Trash2 className="w-3 h-3" />
-                </button>
+
+              {snippet && (
+                <div className="text-[10.5px] text-slate-400 truncate pl-5">
+                  {snippet}
+                </div>
               )}
             </div>
           );
         })}
       </div>
 
-      {/* Status Footer */}
-      <div className="p-3 border-t border-[#22242c] bg-[#101116] flex flex-col gap-2 text-xs">
-        {/* Telegram Integration Indicator */}
-        <div className="flex items-center justify-between text-[#8b8f9f]">
-          <span className="flex items-center gap-1.5 text-[11px]">
-            <Send className="w-3 h-3 text-sky-400" />
-            <span>@DioneAiBot</span>
-          </span>
-          <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-            online
-          </span>
-        </div>
-
-        {/* Gmail Integration Indicator */}
-        <div className="flex items-center justify-between text-[#8b8f9f]">
-          <span className="flex items-center gap-1.5 text-[11px] truncate max-w-[140px]">
-            <Mail className="w-3 h-3 text-amber-400 flex-shrink-0" />
-            <span className="truncate">jassshivnani11</span>
-          </span>
-          <span className="text-[10px] font-mono text-emerald-400">ready</span>
-        </div>
-
-        {/* Engine Spec */}
-        <div className="mt-1 pt-2 border-t border-[#1c1e26] flex items-center justify-between text-[10px] text-[#555866] font-mono">
-          <span className="flex items-center gap-1">
-            <Cpu className="w-3 h-3 text-indigo-400" />
-            <span>MAF 1.20.0</span>
-          </span>
-          <span>Gemini 3.5</span>
+      {/* Bottom Ambient Dream Card */}
+      <div className="p-3 border-t border-white/[0.06] space-y-2">
+        <div className="p-2.5 rounded-xl bg-white/[0.02] border border-white/[0.06] space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="text-[11px] font-medium text-slate-300 flex items-center gap-1.5">
+              <Moon className="w-3 h-3 text-purple-400" />
+              <span>Dream & Scout</span>
+            </span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" title="Autonomous Idle Monitor Active" />
+          </div>
+          <p className="text-[10px] text-slate-400 leading-tight">
+            Autonomously scouts arXiv & web when your workstation is inactive.
+          </p>
+          {dreamStatus && (
+            <div className="text-[10px] font-mono text-emerald-300 bg-emerald-950/40 p-1 rounded border border-emerald-500/30">
+              {dreamStatus}
+            </div>
+          )}
+          <button
+            onClick={handleForceDream}
+            disabled={isDreaming}
+            className="w-full py-1 px-2 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] text-[10.5px] font-mono text-slate-300 flex items-center justify-center gap-1.5 transition-all"
+          >
+            <Sparkles className="w-3 h-3 text-purple-400" />
+            <span>{isDreaming ? 'Scouting...' : 'Trigger Cycle Now'}</span>
+          </button>
         </div>
       </div>
     </aside>

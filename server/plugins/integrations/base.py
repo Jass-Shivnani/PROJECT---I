@@ -34,16 +34,17 @@ class IntegrationDisconnectedError(RuntimeError):
 
 class CredentialVault:
     """
-    Encrypted-at-rest credential storage.
-    
-    In production this would use OS keyring or a proper vault.
-    For the capstone, we use a JSON file with basic obfuscation
-    (NOT production-grade crypto — sufficient for demo).
+    Credential storage with Unified Google OAuth2 fallback and legacy path compatibility.
     """
     
+    GOOGLE_SERVICES = {"google_mail", "google_calendar", "google_drive", "google_photos"}
+
     def __init__(self, data_dir: str = "data"):
-        self._dir = Path(data_dir) / "credentials"
+        self._base_data_dir = Path(data_dir)
+        self._dir = self._base_data_dir / "credentials"
+        self._legacy_dir = self._base_data_dir / "integrations"
         self._dir.mkdir(parents=True, exist_ok=True)
+        self._legacy_dir.mkdir(parents=True, exist_ok=True)
     
     def store(self, integration_id: str, credentials: IntegrationCredentials) -> None:
         """Store credentials for an integration."""
@@ -57,21 +58,16 @@ class CredentialVault:
             "extra": credentials.extra,
             "stored_at": datetime.now().isoformat(),
         }
-        # Basic obfuscation — hash the integration id as filename
-        path.write_text(json.dumps(data, indent=2))
+        path.write_text(json.dumps(data, indent=2), encoding="utf-8")
         logger.info(f"Credentials stored for integration: {integration_id}")
     
-    def retrieve(self, integration_id: str) -> Optional[IntegrationCredentials]:
-        """Retrieve credentials for an integration."""
-        path = self._dir / f"{integration_id}.json"
-        if not path.exists():
-            return None
-        
+    def _load_file(self, path: Path, integration_id: str) -> Optional[IntegrationCredentials]:
         try:
-            data = json.loads(path.read_text())
+            data = json.loads(path.read_text(encoding="utf-8"))
+            raw_auth = data.get("auth_type", "oauth2" if data.get("access_token") else "api_key")
             return IntegrationCredentials(
                 integration_id=integration_id,
-                auth_type=AuthType(data["auth_type"]),
+                auth_type=AuthType(raw_auth),
                 access_token=data.get("access_token"),
                 refresh_token=data.get("refresh_token"),
                 token_expiry=(
@@ -79,42 +75,54 @@ class CredentialVault:
                     if data.get("token_expiry")
                     else None
                 ),
-                api_key=data.get("api_key"),
-                extra=data.get("extra", {}),
+                api_key=data.get("api_key") or data.get("app_password"),
+                extra=data.get("extra", {k: v for k, v in data.items() if k not in ("auth_type", "access_token", "refresh_token", "token_expiry", "api_key")}),
             )
         except Exception as e:
-            logger.error(f"Failed to retrieve credentials for {integration_id}: {e}")
+            logger.error(f"Failed to retrieve credentials for {integration_id} from {path}: {e}")
             return None
+
+    def retrieve(self, integration_id: str) -> Optional[IntegrationCredentials]:
+        """Retrieve credentials for an integration, checking direct, unified Google, and legacy paths."""
+        path = self._dir / f"{integration_id}.json"
+        if path.exists():
+            return self._load_file(path, integration_id)
+
+        # Check unified Google OAuth2 credential if this is a Google service
+        if integration_id in self.GOOGLE_SERVICES:
+            unified_path = self._dir / "google_unified.json"
+            if unified_path.exists():
+                return self._load_file(unified_path, integration_id)
+
+        # Check legacy data/integrations/{integration_id}.json
+        legacy_path = self._legacy_dir / f"{integration_id}.json"
+        if legacy_path.exists():
+            return self._load_file(legacy_path, integration_id)
+
+        return None
     
     def delete(self, integration_id: str) -> bool:
         """Delete stored credentials."""
-        path = self._dir / f"{integration_id}.json"
-        if path.exists():
-            path.unlink()
+        deleted = False
+        for d in (self._dir, self._legacy_dir):
+            path = d / f"{integration_id}.json"
+            if path.exists():
+                path.unlink()
+                deleted = True
+        if deleted:
             logger.info(f"Credentials deleted for: {integration_id}")
-            return True
-        return False
+        return deleted
     
     def list_stored(self) -> list[str]:
         """List all integration IDs with stored credentials."""
         return [p.stem for p in self._dir.glob("*.json")]
 
 
-# ─── Base Integration ────────────────────────────────────────
-
 class BaseIntegration(ABC):
     """
     Abstract base class for all service integrations.
-    
-    Subclasses implement:
-      - configure() -> set up config
-      - authenticate() -> perform auth flow
-      - test_connection() -> verify connectivity
-      - sync() -> pull/push data
-      - get_tools() -> expose tools to the ReAct engine
     """
     
-    # Subclasses must define
     INTEGRATION_ID: str = ""
     DISPLAY_NAME: str = ""
     DESCRIPTION: str = ""
@@ -132,41 +140,22 @@ class BaseIntegration(ABC):
     
     @abstractmethod
     async def authenticate(self, params: dict[str, Any]) -> bool:
-        """
-        Perform authentication.
-        
-        For OAuth2: params should contain auth_code or redirect_url
-        For API_KEY: params should contain api_key
-        For TOKEN: params should contain token
-        
-        Returns True if authentication succeeded.
-        """
         ...
     
     @abstractmethod
     async def test_connection(self) -> bool:
-        """Test if the integration is currently connected and working."""
         ...
     
     @abstractmethod
     async def sync(self) -> dict[str, Any]:
-        """
-        Synchronize data with the external service.
-        
-        Returns a summary dict with sync results.
-        """
         ...
     
     @abstractmethod
     def get_tools(self) -> list[dict]:
-        """
-        Return tool definitions that this integration provides
-        to the ReAct engine.
-        """
         ...
     
     async def connect(self, params: dict[str, Any]) -> bool:
-        """Full connection flow: authenticate → test → sync."""
+        """Full connection flow: authenticate -> test -> sync."""
         self.status = IntegrationStatus.CONNECTING
         
         try:
@@ -208,7 +197,5 @@ class BaseIntegration(ABC):
             "last_sync": self.last_sync.isoformat() if self.last_sync else None,
             "error": self.error_message,
             "tools_count": len(self.get_tools()),
+            "has_credentials": self.credentials is not None,
         }
-
-
-# ─── Integration Registry ───────────────────────────────────

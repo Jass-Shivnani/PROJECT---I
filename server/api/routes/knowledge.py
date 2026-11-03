@@ -6,16 +6,18 @@ REST endpoints for querying and managing the knowledge graph.
 
 from typing import Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, HTTPException
 from pydantic import BaseModel
 from loguru import logger
 
+from server.knowledge.entities import Entity, EntityType
+from server.knowledge.relations import Relation, RelationType
 
 router = APIRouter()
 
 
 class EntityRequest(BaseModel):
-    entity_type: str
+    entity_type: str = "concept"
     name: str
     properties: dict = {}
 
@@ -23,7 +25,7 @@ class EntityRequest(BaseModel):
 class RelationRequest(BaseModel):
     source_id: str
     target_id: str
-    relation_type: str
+    relation_type: str = "related_to"
     weight: float = 1.0
     context: str = ""
 
@@ -41,7 +43,7 @@ async def list_entities(request: Request, entity_type: Optional[str] = None):
         entities = kg.get_entities_by_type(entity_type)
     else:
         entities = []
-        for node_id, data in kg._graph.nodes(data=True):
+        for node_id, data in kg.graph.nodes(data=True):
             entities.append({"id": node_id, **data})
     return {"entities": entities, "total": len(entities)}
 
@@ -50,11 +52,12 @@ async def list_entities(request: Request, entity_type: Optional[str] = None):
 async def add_entity(req: EntityRequest, request: Request):
     """Add an entity to the knowledge graph."""
     kg = request.app.state.knowledge
-    entity_id = kg.add_entity(
-        entity_type=req.entity_type,
-        name=req.name,
-        properties=req.properties,
-    )
+    try:
+        etype = EntityType(req.entity_type.lower())
+    except ValueError:
+        etype = EntityType.CONCEPT
+    entity = Entity(id="", name=req.name, type=etype, metadata=req.properties or {})
+    entity_id = kg.add_entity(entity)
     kg.save()
     return {"id": entity_id, "status": "created"}
 
@@ -65,7 +68,7 @@ async def get_entity(entity_id: str, request: Request):
     kg = request.app.state.knowledge
     entity = kg.get_entity(entity_id)
     if entity is None:
-        return {"error": "Entity not found"}, 404
+        raise HTTPException(status_code=404, detail="Entity not found")
 
     connections = kg.get_connections(entity_id)
     return {
@@ -87,13 +90,19 @@ async def delete_entity(entity_id: str, request: Request):
 async def add_relation(req: RelationRequest, request: Request):
     """Add a relation between two entities."""
     kg = request.app.state.knowledge
-    kg.add_relation(
+    try:
+        rtype = RelationType(req.relation_type.lower())
+    except ValueError:
+        rtype = RelationType.RELATED_TO
+    rel = Relation(
+        id="",
         source_id=req.source_id,
         target_id=req.target_id,
-        relation_type=req.relation_type,
+        relation_type=rtype,
         weight=req.weight,
-        context=req.context,
+        metadata={"context": req.context} if req.context else {},
     )
+    kg.add_relation(rel)
     kg.save()
     return {"status": "created"}
 
@@ -102,12 +111,12 @@ async def add_relation(req: RelationRequest, request: Request):
 async def query_knowledge(req: QueryRequest, request: Request):
     """Query the knowledge graph with natural language."""
     kg = request.app.state.knowledge
-    results = kg.query_relevant(req.query, max_results=req.max_results)
-    return {"results": results, "total": len(results)}
+    results = await kg.query_relevant(req.query, max_results=req.max_results)
+    return {"results": results, "total": len(results) if isinstance(results, list) else (1 if results else 0)}
 
 
 @router.get("/stats")
 async def knowledge_stats(request: Request):
     """Get knowledge graph statistics."""
     kg = request.app.state.knowledge
-    return kg.get_statistics()
+    return kg.get_stats()

@@ -143,7 +143,7 @@ class HeartbeatScheduler:
         )
         self.patterns.append(pattern)
         self.save_patterns()
-        logger.info(f"🎯 Learned new habit: {description}")
+        logger.info(f"[Heartbeat] Learned new habit: {description}")
         return pattern
 
     def strengthen_pattern(self, pattern_id: str):
@@ -166,7 +166,7 @@ class HeartbeatScheduler:
             return
         self._running = True
         self._task = asyncio.create_task(self._heartbeat_loop())
-        logger.info("💓 Heartbeat started")
+        logger.info("[Heartbeat] Loop started")
 
     async def stop(self):
         """Stop the heartbeat."""
@@ -177,7 +177,7 @@ class HeartbeatScheduler:
                 await self._task
             except asyncio.CancelledError:
                 pass
-        logger.info("💓 Heartbeat stopped")
+        logger.info("[Heartbeat] Loop stopped")
 
     async def _heartbeat_loop(self):
         """Main background loop — Dione's pulse with adaptive intervals."""
@@ -372,7 +372,7 @@ class HeartbeatScheduler:
     async def _emit(self, event: BeatEvent):
         """Push event to subscribers and queue."""
         self._event_queue.put_nowait(event)
-        logger.info(f"💓 Beat event: {event.event_type} — {event.title}")
+        logger.info(f"[Heartbeat] Beat event: {event.event_type} - {event.title}")
 
         for subscriber in self._subscribers:
             try:

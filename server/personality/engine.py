@@ -95,7 +95,7 @@ class PersonalityEngine:
         self._last_interaction: float = 0.0
 
         self._load()
-        logger.info(f"💜 Personality engine initialized — mood: {self.mood.label}")
+        logger.info(f"[PersonalityEngine] Initialized — mood: {self.mood.label}")
 
     def _load(self):
         """Load personality state from disk."""

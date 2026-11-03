@@ -18,8 +18,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from server.core.runtime.computer_use import ComputerUseOperator
-from server.proactive.heartbeat import HeartbeatScheduler
-from server.proactive.dream_engine import DreamSynthesisEngine
+from server.proactive.dream_engine import DreamSynthesisEngine, get_windows_idle_seconds
 from server.knowledge.graph import KnowledgeGraph
 import httpx
 
@@ -39,7 +38,7 @@ def test_app_resolver():
 
 def test_physical_idle_detection():
     print("\n--- 2. Testing Windows Physical Idle Detection ---")
-    idle_secs = HeartbeatScheduler._get_system_idle_seconds()
+    idle_secs = get_windows_idle_seconds()
     print(f"  [OK] Native Windows physical idle time: {idle_secs:.2f} seconds")
     assert idle_secs >= 0.0
 
@@ -48,13 +47,13 @@ async def test_dream_synthesis():
     kg_path = PROJECT_ROOT / "data" / "knowledge" / "graph.json"
     kg = KnowledgeGraph(str(kg_path))
     engine = DreamSynthesisEngine(knowledge_graph=kg, data_dir=str(PROJECT_ROOT / "data" / "proactive"))
-    report = await engine.run_synthesis_cycle(force=True)
+    report = await engine.run_synthesis_cycle(force=True, is_deep=True)
     assert report is not None, "Dream synthesis report is None"
     print(f"  [OK] Dream synthesis completed in {report.duration_seconds:.2f}s")
     print(f"  [OK] Scanned entities: {report.entities_scanned}, Created nodes: {report.new_nodes_created}")
     
-    brief_path = PROJECT_ROOT / "data" / "proactive" / "morning_brief.json"
-    assert brief_path.exists(), "Morning brief JSON was not generated"
+    brief_path = PROJECT_ROOT / "data" / "proactive" / "latest_wakeup_briefing.json"
+    assert brief_path.exists(), "Latest wake-up briefing JSON was not generated"
     print("  [OK] Morning briefing card generated successfully")
 
 def test_live_chat_api():

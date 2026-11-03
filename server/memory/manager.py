@@ -17,7 +17,7 @@ import time
 import uuid
 from datetime import datetime, timedelta
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Any, Union
 from pathlib import Path
 
 from loguru import logger
@@ -59,13 +59,16 @@ class MemoryManager:
 
     def __init__(
         self,
-        data_dir: str = "data/memory",
+        data_dir: Any = "data/memory",
         max_short_term: int = 20,
         vectorstore: Optional[VectorStore] = None,
     ):
-        self.data_dir = Path(data_dir)
+        if hasattr(data_dir, "data_dir"):
+            self.data_dir = Path(str(data_dir.data_dir)) / "memory"
+        else:
+            self.data_dir = Path(str(data_dir))
         self.max_short_term = max_short_term
-        self._vectorstore = vectorstore or VectorStore()
+        self._vectorstore = vectorstore or VectorStore(persist_dir=str(self.data_dir / "vectorstore"))
 
         # Short-term memory (recent conversation)
         self._short_term: list[ConversationTurn] = []
@@ -184,70 +187,115 @@ class MemoryManager:
         return self._short_term[-n:]
 
     def get_conversation_as_messages(self, n: int = 10) -> list[dict]:
-        """Get recent turns formatted for LLM input."""
-        return [
+        """Get recent turns formatted for LLM input with strict Gemini turn validation."""
+        from server.llm.turn_validator import validate_gemini_turns
+        raw = [
             {"role": turn.role, "content": turn.content}
             for turn in self._short_term[-n:]
         ]
+        return validate_gemini_turns(raw)
 
     async def _archive_to_longterm(self, turns: list[ConversationTurn]):
-        """Archive old conversation turns to the vector store."""
-        for turn in turns:
-            text = f"[{turn.role}] {turn.content}"
-            metadata = {
-                "role": turn.role,
-                "timestamp": turn.timestamp,
-                "date": datetime.fromtimestamp(turn.timestamp).isoformat(),
+        """Archive old conversation turns to the vector store using fast batch embedding."""
+        if not turns:
+            return
+        texts = [f"[{t.role}] {t.content}" for t in turns]
+        metadatas = [
+            {
+                "role": t.role,
+                "timestamp": t.timestamp,
+                "date": datetime.fromtimestamp(t.timestamp).isoformat(),
+                "sentiment": (t.sentiment or {}).get("label", "neutral"),
             }
-            if turn.sentiment:
-                metadata["sentiment"] = turn.sentiment.get("label", "neutral")
-
-            await self._vectorstore.add(
-                collection="conversations",
-                text=text,
-                metadata=metadata,
-                doc_id=turn.id,
-            )
-
+            for t in turns
+        ]
+        ids = [t.id for t in turns]
+        await self._vectorstore.add_batch(
+            collection="conversations",
+            texts=texts,
+            metadatas=metadatas,
+            ids=ids,
+        )
         logger.debug(f"Archived {len(turns)} turns to long-term memory")
 
     # ------------------------------------------------------------------
     # Long-term memory (semantic retrieval)
     # ------------------------------------------------------------------
 
-    async def recall(self, query: str, n_results: int = 5) -> list[dict]:
+    async def recall(self, query: str, n_results: int = 5, limit: Optional[int] = None) -> list[dict]:
         """
         Recall relevant memories for a given query.
         
-        Searches across conversations, documents, and knowledge
+        Searches across conversations, documents, and knowledge (episodes & facts)
         to find the most relevant context.
         """
+        effective_n = limit if limit is not None else n_results
         results = []
 
-        # Search conversations
+        # 1. Search knowledge collection (episodes, facts, user preferences)
+        knowledge_results = await self._vectorstore.query(
+            collection="knowledge",
+            query_text=query,
+            n_results=effective_n,
+        )
+        for r in knowledge_results:
+            r["source"] = "knowledge"
+        results.extend(knowledge_results)
+
+        # 2. Search conversations
         conv_results = await self._vectorstore.query(
             collection="conversations",
             query_text=query,
-            n_results=n_results,
+            n_results=effective_n,
         )
         for r in conv_results:
             r["source"] = "conversation"
         results.extend(conv_results)
 
-        # Search documents
+        # 3. Search documents
         doc_results = await self._vectorstore.query(
             collection="documents",
             query_text=query,
-            n_results=n_results,
+            n_results=effective_n,
         )
         for r in doc_results:
             r["source"] = "document"
         results.extend(doc_results)
 
-        # Sort by relevance (lower distance = more relevant)
-        results.sort(key=lambda x: x.get("distance", 1.0))
+        # OpenClaw temporal decay reranking
+        from server.memory.hybrid_search import calculate_temporal_decay
+        now_ts = time.time()
+        for r in results:
+            meta = r.get("metadata", {}) or {}
+            ts = meta.get("timestamp") or meta.get("created_at") or now_ts
+            is_evergreen = meta.get("is_evergreen", False) or r.get("source") == "knowledge" or meta.get("type") in ("preference", "identity", "profile")
+            try:
+                age_days = max(0.0, (now_ts - float(ts)) / (24 * 3600))
+            except Exception:
+                age_days = 0.0
+            decay = calculate_temporal_decay(age_days, half_life_days=30.0, is_evergreen=is_evergreen)
+            raw_sim = max(0.0, 1.0 - float(r.get("distance", 0.5)))
+            r["score"] = raw_sim * decay
 
-        return results[:n_results]
+        # Deduplicate near-identical memory snippets (MMR-style diversity filtering) and boost exact keyword hits
+        q_tokens = {w.lower() for w in query.split() if len(w) > 2}
+        for r in results:
+            txt_low = str(r.get("text", "")).lower()
+            lexical_hits = sum(1 for t in q_tokens if t in txt_low)
+            r["score"] = r.get("score", 0.0) + min(0.25, lexical_hits * 0.06)
+
+        results.sort(key=lambda x: x.get("score", 0.0), reverse=True)
+        diverse_results = []
+        seen_prefixes = set()
+        for r in results:
+            norm_prefix = " ".join(str(r.get("text", "")).lower().split())[:120]
+            if norm_prefix and norm_prefix not in seen_prefixes:
+                seen_prefixes.add(norm_prefix)
+                diverse_results.append(r)
+            if len(diverse_results) >= effective_n:
+                break
+
+        return diverse_results
 
     async def store_document(self, text: str, metadata: dict = None) -> str:
         """Store a document in long-term memory."""

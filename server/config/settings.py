@@ -15,8 +15,8 @@ load_dotenv()
 
 class LLMSettings(BaseSettings):
     """LLM backend configuration."""
-    backend: Literal["ollama", "llamacpp", "gemini", "openai", "copilot"] = "copilot"
-    model: str = "claude-sonnet-4.6"
+    backend: Literal["ollama", "llamacpp", "gemini", "openai", "copilot"] = "gemini"
+    model: str = "gemini-3.5-flash-lite"
     
     # Ollama settings
     ollama_host: str = "http://127.0.0.1:11434"

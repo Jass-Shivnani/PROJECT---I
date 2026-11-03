@@ -1,9 +1,8 @@
 @echo off
-title Dione AI - Quick Environment Setup (Group 19, VESIT)
+title Dione AI - Quick Environment Setup
 cd /d "%~dp0"
 echo =====================================================================
 echo                DIONE AI - AUTOMATED SETUP
-echo          Capstone Project - Group 19 (VESIT 2025-26)
 echo =====================================================================
 echo.
 
@@ -33,32 +32,30 @@ if not exist ".venv" (
 )
 
 echo.
-echo [*] Installing all required dependencies...
+echo [*] Installing required dependencies...
 "%~dp0.venv\Scripts\python.exe" -m pip install --upgrade pip
-"%~dp0.venv\Scripts\python.exe" -m pip install -r requirements.txt
+"%~dp0.venv\Scripts\python.exe" -m pip install -r server\requirements.txt
 
 if %ERRORLEVEL% neq 0 (
     echo.
-    echo [WARNING] Some dependencies had warnings or issues. Retrying core dependencies...
-    "%~dp0.venv\Scripts\python.exe" -m pip install -r server\requirements.txt
+    echo [WARNING] Some optional packages failed to install. Retrying core dependencies...
+    "%~dp0.venv\Scripts\python.exe" -m pip install -r requirements.txt
 )
 
 echo.
 if not exist ".env" (
     if exist ".env.example" (
-        echo [*] Initializing .env from .env.example...
         copy ".env.example" ".env" >nul
-        echo [OK] .env initialized.
+        echo [OK] Initialized .env configuration.
     )
-) else (
-    echo [OK] Active .env configuration verified.
 )
 
 echo.
 echo =====================================================================
 echo               SETUP COMPLETE! READY TO RUN DIONE
 echo =====================================================================
-echo To start chatting with Dione, double-click:
-echo     dione_chat.bat
 echo.
-pause
+echo Next steps:
+echo 1. Open .env and add your GEMINI_API_KEY (from https://aistudio.google.com/apikey)
+echo 2. Double-click start_dione.bat to launch the AI Command Center!
+echo.

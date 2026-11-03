@@ -1,3 +1,4 @@
+from pathlib import Path
 """
 Dione AI — Chat Routes
 
@@ -63,8 +64,7 @@ async def chat_message(req: ChatRequest, request: Request):
 
     start = time.monotonic()
 
-    # Store user message in memory
-    await memory.add_turn("user", req.message)
+    # Note: User & assistant turns are recorded in memory by engine.process_message()
 
     # Record user activity for adaptive heartbeat
     if hasattr(request.app.state, "heartbeat"):
@@ -88,7 +88,7 @@ async def chat_message(req: ChatRequest, request: Request):
     latency = (time.monotonic() - start) * 1000
 
     # Generate UI directives — the AI decides how the app looks
-    ui_directives = engine.get_ui_directives(final_response, tools_used)
+    ui_directives = engine.get_ui_directives(final_response, tools_used) if hasattr(engine, "get_ui_directives") else None
 
     # Get current mood
     mood_data = None
@@ -167,17 +167,17 @@ async def chat_websocket(websocket: WebSocket):
             if msg_type != "message" or not content.strip():
                 continue
 
-            # Store user message
-            await memory.add_turn("user", content)
+            # Note: User turn is recorded by engine.process_message()
 
             # Record user activity for adaptive heartbeat
             if hasattr(websocket.app.state, "heartbeat"):
                 websocket.app.state.heartbeat.record_user_activity()
 
             # Process through engine and stream EngineStep events
+            conv_id = data.get("conversation_id")
             full_response = ""
             try:
-                async for step in engine.process_message(content):
+                async for step in engine.process_message(content, conversation_id=conv_id):
                     # step is an EngineStep dataclass
 
                     if step.thought:
@@ -211,8 +211,11 @@ async def chat_websocket(websocket: WebSocket):
                         confirm_raw = await websocket.receive_text()
                         confirm_data = json.loads(confirm_raw)
                         if confirm_data.get("type") == "confirm":
-                            # TODO: Resume engine with confirmation
-                            pass
+                            approved = bool(confirm_data.get("approved", True))
+                            if approved and step.confirmation_id:
+                                engine.approve_action(step.confirmation_id)
+                            elif step.confirmation_id:
+                                engine.deny_action(step.confirmation_id, confirm_data.get("reason", "Denied over WebSocket"))
 
                     if step.state == EngineState.COMPLETE and step.final_answer:
                         full_response = step.final_answer
@@ -259,3 +262,50 @@ async def get_history(request: Request, n: int = 20):
             for t in turns
         ]
     }
+
+# ------------------------------------------------------------------
+# Thread Persistence
+# ------------------------------------------------------------------
+
+THREADS_FILE = Path("data/memory/threads.json")
+
+
+@router.get("/chat/threads")
+async def get_saved_threads():
+    """Retrieve saved chat threads from persistent storage."""
+    try:
+        if THREADS_FILE.exists():
+            return json.loads(THREADS_FILE.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.warning(f"Failed to read threads.json: {e}")
+    return {"threads": []}
+
+
+@router.post("/chat/threads")
+async def save_threads(req: Request):
+    """Save chat threads to persistent storage with overwrite protection and automated backup."""
+    try:
+        data = await req.json()
+        new_threads = data.get("threads", [])
+        THREADS_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+        if THREADS_FILE.exists():
+            try:
+                existing = json.loads(THREADS_FILE.read_text(encoding="utf-8"))
+                existing_threads = existing.get("threads", [])
+                if len(existing_threads) > 1 and len(new_threads) <= 1:
+                    first_msg_count = len(new_threads[0].get("messages", [])) if new_threads else 0
+                    if first_msg_count <= 1:
+                        logger.warning("[ChatStorage] Ignored overwrite of rich threads by fresh/unhydrated client session.")
+                        return {"status": "preserved", "count": len(existing_threads)}
+                backup_file = THREADS_FILE.with_suffix(".backup.json")
+                backup_file.write_text(json.dumps(existing, indent=2), encoding="utf-8")
+            except Exception as read_err:
+                logger.debug(f"[ChatStorage] Backup warning: {read_err}")
+
+        THREADS_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        return {"status": "ok", "count": len(new_threads)}
+    except Exception as e:
+        logger.error(f"Failed to write threads.json: {e}")
+        return {"status": "error", "message": str(e)}
+

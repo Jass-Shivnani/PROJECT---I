@@ -55,7 +55,7 @@ class DioneTool:
                 required.append(p.name)
 
         return {
-            "name": self.name,
+            "name": self.name.replace(".", "_"),
             "description": self.description,
             "parameters": {
                 "type": "object",

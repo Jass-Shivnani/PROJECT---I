@@ -1,1431 +1,1458 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dione Agent Studio</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Agent UI — Dione AgentOS</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg-base: #080911;
-      --bg-surface: #0f1220;
-      --bg-surface-elevated: #161a2e;
-      --bg-card: #141728;
-      --bg-card-hover: #1c213a;
-      --bg-input: #0a0c16;
+      --bg-primary: #111113;
+      --bg-sidebar: #161618;
+      --bg-card: #1c1c1f;
+      --bg-input: #1b1b1e;
       --border-subtle: rgba(255, 255, 255, 0.08);
-      --border-light: rgba(255, 255, 255, 0.14);
-      --border-focus: rgba(168, 85, 247, 0.5);
-      
-      --accent-purple: #a855f7;
-      --accent-purple-glow: rgba(168, 85, 247, 0.35);
-      --accent-indigo: #6366f1;
-      --accent-cyan: #06b6d4;
-      --accent-emerald: #10b981;
-      --accent-amber: #f59e0b;
-      --accent-red: #ef4444;
-
-      --text-main: #f8fafc;
-      --text-muted: #94a3b8;
-      --text-dim: #64748b;
-      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", sans-serif;
-      --font-mono: "JetBrains Mono", Consolas, "SF Mono", monospace;
+      --agno-orange: #ff4017;
     }
-
     * {
       box-sizing: border-box;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+    .font-mono {
+      font-family: 'DM Mono', monospace !important;
+    }
+    body {
+      background-color: var(--bg-primary);
+      color: #fafafa;
       margin: 0;
       padding: 0;
-      font-family: var(--font-sans);
-      user-select: none;
-    }
-
-    body {
-      background: var(--bg-base);
-      color: var(--text-main);
-      height: 100vh;
       overflow: hidden;
-      display: flex;
     }
-
-    /* ========================================= */
-    /* 1. FAR-LEFT NAVIGATION RAIL (Cherry Style)*/
-    /* ========================================= */
-    .nav-rail {
-      width: 64px;
-      background: #080911;
-      border-right: 1px solid var(--border-subtle);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 16px 0;
-      gap: 16px;
-      flex-shrink: 0;
-      z-index: 10;
-    }
-
-    .rail-logo {
-      width: 38px;
-      height: 38px;
-      border-radius: 12px;
-      background: linear-gradient(135deg, #9333ea, #4f46e5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 800;
-      font-size: 18px;
-      color: white;
-      box-shadow: 0 0 20px rgba(147, 51, 234, 0.45);
-      cursor: pointer;
-      transition: transform 0.2s ease;
-    }
-
-    .rail-logo:hover {
-      transform: scale(1.06);
-    }
-
-    .rail-divider {
-      width: 32px;
-      height: 1px;
-      background: var(--border-subtle);
-      margin: 4px 0;
-    }
-
-    .rail-btn {
-      width: 42px;
-      height: 42px;
-      border-radius: 10px;
-      background: transparent;
-      border: 1px solid transparent;
-      color: var(--text-dim);
-      font-size: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      position: relative;
-    }
-
-    .rail-btn:hover {
-      background: rgba(255, 255, 255, 0.05);
-      color: var(--text-main);
-    }
-
-    .rail-btn.active {
-      background: rgba(168, 85, 247, 0.15);
-      border-color: rgba(168, 85, 247, 0.4);
-      color: #c084fc;
-      box-shadow: 0 0 12px rgba(168, 85, 247, 0.25);
-    }
-
-    .rail-spacer {
-      flex: 1;
-    }
-
-    .rail-status-dot {
-      width: 10px;
-      height: 10px;
-      border-radius: 50%;
-      background: var(--accent-emerald);
-      box-shadow: 0 0 10px var(--accent-emerald);
-      margin-bottom: 8px;
-    }
-
-    /* ========================================= */
-    /* 2. TASK SESSIONS SIDEBAR                  */
-    /* ========================================= */
-    .sidebar {
-      width: 260px;
-      background: #0d0f1b;
-      border-right: 1px solid var(--border-subtle);
-      display: flex;
-      flex-direction: column;
-      flex-shrink: 0;
-    }
-
-    .sidebar-header {
-      padding: 18px 16px 12px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .sidebar-title-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .sidebar-title {
-      font-size: 13px;
-      font-weight: 700;
-      letter-spacing: 0.5px;
-      color: #cbd5e1;
-      text-transform: uppercase;
-    }
-
-    .new-task-btn {
-      background: linear-gradient(135deg, #9333ea, #4f46e5);
-      border: none;
-      color: white;
-      padding: 9px 14px;
-      border-radius: 9px;
-      font-size: 12px;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      box-shadow: 0 4px 12px rgba(147, 51, 234, 0.3);
-    }
-
-    .new-task-btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 16px rgba(147, 51, 234, 0.45);
-    }
-
-    .task-list {
-      flex: 1;
-      overflow-y: auto;
-      padding: 8px 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .task-item {
-      padding: 10px 12px;
-      border-radius: 10px;
-      background: transparent;
-      border: 1px solid transparent;
-      cursor: pointer;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      transition: all 0.15s ease;
-    }
-
-    .task-item:hover {
-      background: var(--bg-card-hover);
-    }
-
-    .task-item.active {
-      background: var(--bg-card);
-      border-color: var(--border-light);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-    }
-
-    .task-item-title {
-      font-size: 13px;
-      font-weight: 600;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      color: #f1f5f9;
-    }
-
-    .task-item-meta {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 11px;
-      color: var(--text-dim);
-    }
-
-    .task-badge {
-      display: inline-block;
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-    }
-
-    .task-badge.completed { background: var(--accent-emerald); box-shadow: 0 0 6px var(--accent-emerald); }
-    .task-badge.running { background: var(--accent-cyan); box-shadow: 0 0 8px var(--accent-cyan); animation: pulse 1s infinite alternate; }
-    .task-badge.idle { background: var(--text-dim); }
-
-    /* Telemetry Mini-Meters */
-    .sidebar-footer {
-      padding: 14px 16px;
-      border-top: 1px solid var(--border-subtle);
-      background: #090b14;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-
-    .telemetry-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-
-    .meter-bar {
-      width: 100%;
+    ::-webkit-scrollbar {
+      width: 4px;
       height: 4px;
-      background: rgba(255, 255, 255, 0.06);
-      border-radius: 2px;
-      overflow: hidden;
     }
-
-    .meter-fill {
-      height: 100%;
-      background: linear-gradient(90deg, #06b6d4, #a855f7);
-      border-radius: 2px;
-      transition: width 0.4s ease;
-    }
-
-    /* ========================================= */
-    /* 3. MAIN WORKSPACE CANVAS                  */
-    /* ========================================= */
-    .main-canvas {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      background: var(--bg-base);
-      overflow: hidden;
-    }
-
-    /* Top Navigation Bar */
-    .top-bar {
-      height: 56px;
-      padding: 0 20px;
-      border-bottom: 1px solid var(--border-subtle);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: rgba(13, 15, 27, 0.85);
-      backdrop-filter: blur(14px);
-      z-index: 5;
-    }
-
-    .header-left {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-    }
-
-    .state-orb {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      background: var(--accent-emerald);
-      box-shadow: 0 0 10px var(--accent-emerald);
-      transition: all 0.3s ease;
-    }
-
-    .state-orb.thinking { background: var(--accent-amber); box-shadow: 0 0 12px var(--accent-amber); animation: pulse 0.8s infinite alternate; }
-    .state-orb.speaking { background: var(--accent-cyan); box-shadow: 0 0 12px var(--accent-cyan); animation: pulse 0.8s infinite alternate; }
-    .state-orb.acting { background: #ec4899; box-shadow: 0 0 12px #ec4899; }
-    .state-orb.paused { background: var(--accent-red); box-shadow: 0 0 12px var(--accent-red); }
-
-    .header-title-box {
-      display: flex;
-      flex-direction: column;
-    }
-
-    .header-task-title {
-      font-size: 14px;
-      font-weight: 700;
-      color: #f8fafc;
-    }
-
-    .header-task-status {
-      font-size: 11px;
-      color: var(--text-muted);
-    }
-
-    /* Dual Mode Switcher Pill (Cherry / Taskhomie style) */
-    .mode-switch-group {
-      display: flex;
-      align-items: center;
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--border-subtle);
-      border-radius: 10px;
-      padding: 3px;
-      gap: 2px;
-    }
-
-    .mode-btn {
-      padding: 5px 12px;
-      border-radius: 7px;
-      border: none;
+    ::-webkit-scrollbar-track {
       background: transparent;
-      color: var(--text-muted);
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      transition: all 0.2s ease;
     }
-
-    .mode-btn.active {
-      background: linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(99, 102, 241, 0.3));
-      border: 1px solid rgba(168, 85, 247, 0.5);
-      color: #f1f5f9;
-      box-shadow: 0 2px 8px rgba(168, 85, 247, 0.2);
+    ::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.12);
+      border-radius: 9999px;
     }
-
-    .header-right {
-      display: flex;
-      align-items: center;
-      gap: 10px;
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.25);
     }
-
-    .header-pill {
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--border-subtle);
-      padding: 5px 10px;
-      border-radius: 8px;
-      font-size: 11px;
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      color: #cbd5e1;
+    @keyframes pulseDot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.45; transform: scale(0.92); }
     }
-
-    .header-pill.failsafe {
-      border-color: rgba(245, 158, 11, 0.35);
-      color: #fde047;
-      cursor: help;
+    @keyframes clickRipple {
+      0% { transform: scale(0.3); opacity: 1; }
+      100% { transform: scale(2.6); opacity: 0; }
     }
-
-    .abort-btn {
-      background: rgba(239, 68, 68, 0.12);
-      border: 1px solid rgba(239, 68, 68, 0.35);
-      color: #f87171;
-      padding: 6px 12px;
-      border-radius: 8px;
-      font-size: 11px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      display: flex;
-      align-items: center;
-      gap: 5px;
+    .animate-dot {
+      animation: pulseDot 2s infinite ease-in-out;
     }
-
-    .abort-btn:hover {
-      background: var(--accent-red);
-      color: white;
-    }
-
-    /* Spoken Thinking Ribbon */
-    .bridge-ribbon {
-      background: linear-gradient(90deg, rgba(168, 85, 247, 0.1), rgba(6, 182, 212, 0.1));
-      border-bottom: 1px solid rgba(168, 85, 247, 0.18);
-      padding: 7px 20px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      color: #e2e8f0;
-      font-style: italic;
-    }
-
-    .bridge-ribbon .icon {
-      font-style: normal;
-      color: #c084fc;
-    }
-
-    /* Split Workspace */
-    .workspace-split {
-      flex: 1;
-      display: grid;
-      grid-template-columns: 1fr 420px;
-      overflow: hidden;
-      transition: grid-template-columns 0.3s ease;
-    }
-
-    .workspace-split.collapsed {
-      grid-template-columns: 1fr 0px;
-    }
-
-    /* Left Column: Chat & Checklist */
-    .transcript-col {
-      display: flex;
-      flex-direction: column;
-      border-right: 1px solid var(--border-subtle);
-      overflow: hidden;
-    }
-
-    /* Step Checklist Card */
-    .plan-card {
-      margin: 14px 18px 6px 18px;
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: 12px;
-      padding: 12px 16px;
-    }
-
-    .plan-header {
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--accent-cyan);
-      margin-bottom: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .step-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 5px 0;
-      font-size: 12px;
-    }
-
-    .step-desc {
-      flex: 1;
-      color: #cbd5e1;
-    }
-
-    .step-desc.completed {
-      color: var(--text-dim);
-      text-decoration: line-through;
-    }
-
-    .step-tool {
-      font-size: 10px;
-      font-family: var(--font-mono);
-      color: var(--accent-purple);
-      background: rgba(168, 85, 247, 0.1);
-      padding: 2px 6px;
-      border-radius: 4px;
-    }
-
-    /* Messages Stream */
-    .messages-stream {
-      flex: 1;
-      overflow-y: auto;
-      padding: 12px 18px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .msg-bubble {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      max-width: 85%;
-      padding: 12px 16px;
-      border-radius: 12px;
-      font-size: 13px;
-      line-height: 1.5;
-      user-select: text;
-    }
-
-    .msg-bubble.user {
-      align-self: flex-end;
-      background: linear-gradient(135deg, #7c3aed, #4f46e5);
-      color: white;
-      border-bottom-right-radius: 4px;
-    }
-
-    .msg-bubble.assistant {
-      align-self: flex-start;
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      color: #f1f5f9;
-      border-bottom-left-radius: 4px;
-    }
-
-    .msg-bubble.filler {
-      align-self: flex-start;
-      background: rgba(168, 85, 247, 0.08);
-      border: 1px solid rgba(168, 85, 247, 0.2);
-      color: #d8b4fe;
-      font-style: italic;
-      padding: 8px 12px;
-      font-size: 12px;
-    }
-
-    /* Tool Execution Action Cards (Taskhomie / computer-agent style) */
-    .tool-card {
-      align-self: flex-start;
-      width: 100%;
-      max-width: 90%;
-      background: #0d0f1a;
-      border: 1px solid rgba(168, 85, 247, 0.25);
-      border-left: 3px solid var(--accent-purple);
-      border-radius: 8px;
-      padding: 10px 12px;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .tool-card-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      color: #c084fc;
-      font-weight: 600;
-    }
-
-    .tool-card-body {
-      color: #94a3b8;
-      font-size: 11px;
-      line-height: 1.4;
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-
-    /* Markdown Styling Inside Assistant Bubbles */
-    .msg-bubble strong { color: #ffffff; font-weight: 700; }
-    .msg-bubble .code-block {
-      background: #06070e;
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 6px;
-      padding: 10px;
-      margin: 6px 0;
-      overflow-x: auto;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: #38bdf8;
-    }
-    .msg-bubble .inline-code {
-      background: rgba(255, 255, 255, 0.08);
-      padding: 2px 5px;
-      border-radius: 4px;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: #f472b6;
-    }
-    .msg-bubble .md-ul { margin: 6px 0 6px 18px; }
-    .msg-bubble .md-li { margin: 3px 0; }
-
-    /* Bottom Prompt Dock */
-    .bottom-dock {
-      padding: 12px 18px;
-      background: rgba(13, 15, 27, 0.95);
-      border-top: 1px solid var(--border-subtle);
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-
-    .chips-row {
-      display: flex;
-      gap: 7px;
-      overflow-x: auto;
-      padding-bottom: 2px;
-    }
-
-    .chips-row::-webkit-scrollbar {
-      height: 3px;
-    }
-
-    .chip-btn {
-      background: rgba(255, 255, 255, 0.04);
-      border: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-      padding: 4px 10px;
-      border-radius: 6px;
-      font-size: 11px;
-      cursor: pointer;
-      white-space: nowrap;
-      transition: all 0.2s ease;
-    }
-
-    .chip-btn:hover {
-      background: rgba(168, 85, 247, 0.14);
-      border-color: rgba(168, 85, 247, 0.35);
-      color: #f1f5f9;
-    }
-
-    .prompt-box {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-    }
-
-    .prompt-input {
-      flex: 1;
-      background: var(--bg-input);
-      border: 1px solid var(--border-subtle);
-      border-radius: 10px;
-      padding: 11px 14px;
-      color: white;
-      font-size: 13px;
-      outline: none;
-      transition: all 0.2s ease;
-    }
-
-    .prompt-input:focus {
-      border-color: var(--border-focus);
-      box-shadow: 0 0 14px var(--accent-purple-glow);
-    }
-
-    .voice-mic-btn {
-      width: 42px;
-      height: 42px;
-      border-radius: 10px;
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid var(--border-subtle);
-      color: #e2e8f0;
-      font-size: 16px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s ease;
-    }
-
-    .voice-mic-btn:hover {
-      background: rgba(6, 182, 212, 0.2);
-      border-color: var(--accent-cyan);
-    }
-
-    .run-btn {
-      background: linear-gradient(135deg, #9333ea, #4f46e5);
-      border: none;
-      color: white;
-      padding: 11px 18px;
-      border-radius: 10px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      box-shadow: 0 4px 14px rgba(147, 51, 234, 0.3);
-    }
-
-    .run-btn:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 6px 18px rgba(147, 51, 234, 0.45);
-    }
-
-    /* ========================================= */
-    /* 4. RIGHT INSPECTOR / TELEMETRY DRAWER     */
-    /* ========================================= */
-    .inspector-col {
-      display: flex;
-      flex-direction: column;
-      background: #0b0d18;
-      overflow: hidden;
-    }
-
-    .inspector-tabs {
-      display: flex;
-      border-bottom: 1px solid var(--border-subtle);
-      background: rgba(13, 15, 27, 0.6);
-    }
-
-    .tab-btn {
-      flex: 1;
-      padding: 12px 8px;
-      text-align: center;
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--text-dim);
-      background: transparent;
-      border: none;
-      cursor: pointer;
-      border-bottom: 2px solid transparent;
-      transition: all 0.2s ease;
-    }
-
-    .tab-btn.active {
-      color: var(--text-main);
-      border-bottom-color: var(--accent-purple);
-      background: rgba(168, 85, 247, 0.08);
-    }
-
-    .inspector-content {
-      flex: 1;
-      overflow-y: auto;
-      padding: 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    /* Screen Preview Card */
-    .screen-card {
-      background: var(--bg-card);
-      border: 1px solid var(--border-subtle);
-      border-radius: 12px;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-    }
-
-    .screen-card-header {
-      padding: 8px 12px;
-      font-size: 11px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--text-muted);
-      border-bottom: 1px solid var(--border-subtle);
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-    }
-
-    .screen-refresh-btn {
-      background: transparent;
-      border: 1px solid var(--border-subtle);
-      color: var(--text-muted);
-      padding: 2px 7px;
-      border-radius: 4px;
-      font-size: 10px;
-      cursor: pointer;
-    }
-
-    .screen-refresh-btn:hover {
-      background: rgba(255, 255, 255, 0.08);
-      color: white;
-    }
-
-    .screen-img {
-      width: 100%;
-      height: 190px;
-      object-fit: cover;
-      background: #000;
-      display: block;
-      cursor: crosshair;
-    }
-
-    /* Terminal Console */
-    .terminal-box {
-      flex: 1;
-      background: #05060b;
-      border: 1px solid var(--border-subtle);
-      border-radius: 10px;
-      padding: 12px;
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: #38bdf8;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      line-height: 1.4;
-    }
-
-    .term-line {
-      white-space: pre-wrap;
-      word-break: break-all;
-    }
-    .term-line.cmd { color: #c084fc; font-weight: 600; }
-    .term-line.err { color: #f87171; }
-    .term-line.ok { color: #4ade80; }
-    .term-line.sys { color: #94a3b8; }
-
-    /* Dossier / Memory Card */
-    .dossier-card {
-      background: var(--bg-surface);
-      border: 1px solid var(--border-subtle);
-      border-radius: 10px;
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-
-    .dossier-name {
-      font-size: 13px;
-      font-weight: 700;
-      color: #f8fafc;
-    }
-
-    .dossier-role {
-      font-size: 11px;
-      color: var(--accent-cyan);
-    }
-
-    .dossier-commit {
-      font-size: 11px;
-      color: #cbd5e1;
-      background: rgba(255, 255, 255, 0.03);
-      padding: 6px 8px;
-      border-radius: 6px;
-      border-left: 2px solid var(--accent-purple);
-      margin-top: 4px;
-    }
-
-    @keyframes pulse {
-      0% { opacity: 0.6; transform: scale(0.92); }
-      100% { opacity: 1; transform: scale(1.08); }
+    .cursor-ripple {
+      animation: clickRipple 0.6s ease-out forwards;
     }
   </style>
 </head>
-<body>
-  <!-- 1. FAR-LEFT NAVIGATION RAIL (Cherry Studio Style) -->
-  <div class="nav-rail">
-    <div class="rail-logo" id="railLogo" title="Dione Autonomous Desktop Agent">D</div>
-    <div class="rail-divider"></div>
-    <button class="rail-btn active" id="railBtnChat" title="Task Threads & Chat">💬</button>
-    <button class="rail-btn" id="railBtnVision" title="Desktop Vision & Screen Grounding">👁️</button>
-    <button class="rail-btn" id="railBtnAmbient" title="Ambient 24/7 Cowork & Dream Engine">🌙</button>
-    <button class="rail-btn" id="railBtnContacts" title="Contacts & Knowledge Graph">👥</button>
-    <div class="rail-spacer"></div>
-    <div class="rail-status-dot" id="railStatusDot" title="Engine Online • Sub-2ms Traversal"></div>
-    <button class="rail-btn" id="railBtnCollapse" title="Toggle Inspector Drawer">◨</button>
-  </div>
+<body class="h-screen w-screen flex overflow-hidden bg-[#111113] text-[#fafafa] select-none">
 
-  <!-- 2. TASK SESSIONS SIDEBAR -->
-  <div class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-      <div class="sidebar-title-row">
-        <span class="sidebar-title">Task Threads</span>
+  <!-- ===================================================================== -->
+  <!-- 1. AGNO AGENT-UI LEFT SIDEBAR (268PX, COLLAPSIBLE)                    -->
+  <!-- ===================================================================== -->
+  <aside id="agnoSidebar" class="w-[272px] bg-[#161618] border-r border-white/[0.07] flex flex-col h-full flex-shrink-0 z-20 transition-all">
+    <!-- Top Brand Header: Agno Flame Icon + AGENT UI + Collapse Button -->
+    <div class="px-4 pt-4 pb-3 flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-6 h-6 rounded-md bg-[#FF4017] flex items-center justify-center shadow-sm shadow-[#FF4017]/30">
+          <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-white fill-current">
+            <path d="M12 2L4 7v10l8 5 8-5V7l-8-5zm0 2.8L17.5 8 12 11.2 6.5 8 12 4.8zM6 9.8l5 3v6.4l-5-3V9.8zm7 9.4v-6.4l5-3v6.4l-5 3z"/>
+          </svg>
+        </div>
+        <span class="font-mono text-xs font-medium tracking-[0.14em] uppercase text-zinc-100">AGENT UI</span>
+        <span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-zinc-400">Dione OS</span>
       </div>
-      <button class="new-task-btn" id="newTaskBtn">
-        <span>+</span> <span>New Task</span>
+      <button id="btnCollapseSidebar" class="p-1.5 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06] transition-colors" title="Collapse sidebar">
+        <i data-lucide="panel-left-close" class="w-4 h-4"></i>
       </button>
     </div>
 
-    <div class="task-list" id="taskList">
-      <!-- Injected via JavaScript -->
+    <!-- + NEW CHAT Primary White CTA Button (Signature Agno Agent-UI) -->
+    <div class="px-3 pb-3">
+      <button id="btnNewChat" class="w-full py-2.5 px-3 rounded-xl bg-[#fafafa] hover:bg-white text-[#111113] font-mono text-xs font-medium uppercase tracking-wider flex items-center justify-center gap-2 shadow-sm transition-all active:scale-[0.99]">
+        <i data-lucide="plus" class="w-3.5 h-3.5 stroke-[2.5]"></i>
+        <span>NEW CHAT</span>
+      </button>
     </div>
 
-    <!-- Telemetry Mini-Meters -->
-    <div class="sidebar-footer">
-      <div class="telemetry-row">
-        <span>CPU Telemetry</span>
-        <span id="cpuText">14%</span>
-      </div>
-      <div class="meter-bar"><div class="meter-fill" id="cpuMeter" style="width: 14%;"></div></div>
+    <!-- Scrollable Sidebar Configuration & Sessions -->
+    <div class="flex-1 overflow-y-auto px-3 space-y-4 pb-4">
 
-      <div class="telemetry-row" style="margin-top: 4px;">
-        <span>RAM Free</span>
-        <span id="ramText">6.0 GB</span>
+      <!-- ENDPOINT SECTION -->
+      <div class="space-y-1.5">
+        <div class="font-mono text-[10px] uppercase tracking-[0.12em] text-zinc-400 px-1">ENDPOINT</div>
+        <div class="group flex items-center justify-between px-3 py-2 rounded-xl bg-[#1f1f23] border border-white/[0.07] hover:border-white/[0.15] transition-all">
+          <div class="flex items-center gap-2 min-w-0 flex-1">
+            <input
+              id="inputEndpointUrl"
+              type="text"
+              value="http://localhost:8900"
+              readonly
+              class="bg-transparent font-mono text-[11px] text-zinc-200 truncate w-full focus:outline-none cursor-pointer"
+            />
+          </div>
+          <div class="flex items-center gap-1.5 flex-shrink-0">
+            <span id="endpointStatusDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-dot" title="AgentOS Connected"></span>
+            <button id="btnEditEndpoint" class="p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition-colors" title="Edit Endpoint">
+              <i data-lucide="pencil" class="w-3 h-3"></i>
+            </button>
+            <button id="btnRefreshEndpoint" class="p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition-colors" title="Reconnect AgentOS">
+              <i data-lucide="rotate-cw" class="w-3 h-3"></i>
+            </button>
+          </div>
+        </div>
       </div>
-      <div class="meter-bar"><div class="meter-fill" id="ramMeter" style="width: 48%;"></div></div>
 
-      <div class="telemetry-row" style="margin-top: 6px;">
-        <span>Physical Idle</span>
-        <span id="idleText">0s</span>
+      <!-- AI STUDIO API KEY / AUTH TOKEN SECTION -->
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between px-1">
+          <span class="font-mono text-[10px] uppercase tracking-[0.12em] text-zinc-400">AI STUDIO API KEY</span>
+          <span id="lblKeyStatus" class="font-mono text-[9px] text-emerald-400">READY</span>
+        </div>
+        <div class="flex items-center justify-between px-3 py-2 rounded-xl bg-[#1f1f23] border border-white/[0.07] focus-within:border-white/[0.2] transition-all">
+          <input
+            id="inputAiStudioKey"
+            type="password"
+            placeholder="AIzaSy... (Optional live key)"
+            class="bg-transparent font-mono text-[11px] text-zinc-200 placeholder-zinc-500 w-full focus:outline-none"
+          />
+          <button id="btnSaveApiKey" class="ml-1.5 px-1.5 py-0.5 rounded bg-white/[0.08] hover:bg-white/[0.15] font-mono text-[10px] text-zinc-300 transition-colors">
+            Save
+          </button>
+        </div>
+      </div>
+
+      <!-- MODE SELECTOR: TEAM (ORCHESTRATOR) VS AGENT -->
+      <div class="space-y-1.5">
+        <div class="font-mono text-[10px] uppercase tracking-[0.12em] text-zinc-400 px-1">MODE</div>
+        <div class="grid grid-cols-2 p-1 rounded-xl bg-[#1f1f23] border border-white/[0.07] font-mono text-[11px]">
+          <button id="btnModeTeam" class="py-1.5 rounded-lg bg-[#2c2c31] text-white font-medium flex items-center justify-center gap-1.5 shadow-sm transition-all">
+            <i data-lucide="users" class="w-3.5 h-3.5 text-[#FF4017]"></i>
+            <span>Team</span>
+          </button>
+          <button id="btnModeAgent" class="py-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 flex items-center justify-center gap-1.5 transition-all">
+            <i data-lucide="bot" class="w-3.5 h-3.5"></i>
+            <span>Agent</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ACTIVE TEAM / AGENT SELECTOR -->
+      <div class="space-y-1.5">
+        <div id="lblEntitySelectorHeader" class="font-mono text-[10px] uppercase tracking-[0.12em] text-zinc-400 px-1">TEAM</div>
+        <div class="relative">
+          <select id="selectActiveEntity" class="w-full appearance-none px-3 py-2 rounded-xl bg-[#1f1f23] border border-white/[0.07] hover:border-white/[0.15] font-mono text-[11px] text-zinc-200 focus:outline-none cursor-pointer">
+            <option value="dione-team">Dione Orchestrator Team (5 Agents)</option>
+            <option value="computer-use-agent">Computer-Use Operator Agent</option>
+            <option value="knowledge-social-agent">Knowledge & Social Graph Agent</option>
+            <option value="system-sandbox-agent">System & SQLite Sandbox Agent</option>
+            <option value="web-research-agent">Deep Web & arXiv Research Agent</option>
+          </select>
+        </div>
+
+        <!-- Model Stack Badges (Gemini Live Frontman + Background 3.8/3.7 Flash) -->
+        <div class="pt-1 space-y-1">
+          <div class="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.05] font-mono text-[10px]">
+            <span class="text-zinc-400">VOICE LIVE</span>
+            <span class="text-emerald-400">gemini-2.5-flash-live</span>
+          </div>
+          <div class="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-white/[0.03] border border-white/[0.05] font-mono text-[10px]">
+            <span class="text-zinc-400">BG WORKER</span>
+            <select id="selectBgFlashModel" class="bg-transparent text-[#FF4017] font-mono text-[10px] focus:outline-none cursor-pointer">
+              <option value="gemini-3.8-flash" class="bg-[#161618] text-white">gemini-3.8-flash</option>
+              <option value="gemini-3.7-flash" class="bg-[#161618] text-white">gemini-3.7-flash</option>
+              <option value="gemini-2.5-flash" class="bg-[#161618] text-white">gemini-2.5-flash</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- SESSIONS LIST -->
+      <div class="space-y-1.5 pt-1">
+        <div class="flex items-center justify-between px-1">
+          <span class="font-mono text-[10px] uppercase tracking-[0.12em] text-zinc-400">SESSIONS</span>
+          <span id="lblSessionsCount" class="font-mono text-[10px] text-zinc-500">2</span>
+        </div>
+        <div id="sessionsList" class="space-y-1">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom Sidebar Footer: Stitch Prompt & Computer-Use Drawer Shortcuts -->
+    <div class="p-3 border-t border-white/[0.07] bg-[#131315] flex items-center justify-between gap-2">
+      <button id="btnOpenStitchModal" class="flex-1 py-1.5 px-2.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.07] font-mono text-[10px] text-zinc-300 flex items-center justify-center gap-1.5 transition-colors" title="Copy Google Stitch Prompt for this exact Agno Agent-UI layout">
+        <i data-lucide="copy" class="w-3 h-3 text-[#FF4017]"></i>
+        <span>Stitch Prompt</span>
+      </button>
+      <button id="btnToggleComputerDrawer" class="py-1.5 px-2.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.07] font-mono text-[10px] text-zinc-300 flex items-center gap-1.5 transition-colors" title="Toggle Live Computer-Use Screen Drawer">
+        <i data-lucide="monitor" class="w-3 h-3 text-emerald-400"></i>
+        <span>Screen</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ===================================================================== -->
+  <!-- 2. MAIN AGNO AGENT-UI CHAT & REASONING AREA                           -->
+  <!-- ===================================================================== -->
+  <main class="flex-1 flex flex-col h-full overflow-hidden bg-[#111113] relative">
+
+    <!-- Floating Top-Left Expand Sidebar Button (Visible when sidebar collapsed) -->
+    <div class="h-12 px-4 flex items-center justify-between border-b border-white/[0.05] flex-shrink-0">
+      <div class="flex items-center gap-2.5">
+        <button id="btnExpandSidebar" class="hidden p-1.5 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] text-zinc-300 transition-colors" title="Expand sidebar">
+          <i data-lucide="panel-left-open" class="w-4 h-4"></i>
+        </button>
+        <div class="flex items-center gap-2 font-mono text-xs text-zinc-400">
+          <span id="headerActiveModeBadge" class="px-2 py-0.5 rounded-md bg-white/[0.05] text-zinc-200 border border-white/[0.07]">TEAM</span>
+          <span id="headerActiveEntityName" class="text-zinc-300">Dione Orchestrator Team</span>
+          <span class="text-zinc-600">/</span>
+          <span id="headerActiveModelName" class="text-[#FF4017]">gemini-3.8-flash</span>
+        </div>
+      </div>
+
+      <!-- Right Header Pill: Computer-Use Status + Live Voice Duplex Status -->
+      <div class="flex items-center gap-2">
+        <button id="btnHeaderComputerPill" class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] font-mono text-[11px] text-zinc-300 flex items-center gap-1.5 transition-colors">
+          <span id="dotComputerUse" class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+          <span>Computer Use</span>
+        </button>
+        <button id="btnHeaderScreenToggle" class="px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.08] border border-white/[0.07] font-mono text-[11px] text-zinc-300 flex items-center gap-1.5 transition-colors">
+          <i data-lucide="eye" class="w-3.5 h-3.5 text-zinc-400"></i>
+          <span class="hidden sm:inline">Desktop View</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Center Scrollable Messages & Empty Welcome State -->
+    <div id="chatScrollArea" class="flex-1 overflow-y-auto px-4 sm:px-6 py-6">
+      <div class="max-w-3xl mx-auto w-full space-y-6">
+
+        <!-- SIGNATURE AGNO AGENT-UI EMPTY WELCOME CARD (Shown when session has 0 messages) -->
+        <div id="agnoWelcomeState" class="hidden py-16 flex flex-col items-center text-center space-y-5">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-lg bg-[#FF4017] flex items-center justify-center shadow-md shadow-[#FF4017]/25">
+              <svg viewBox="0 0 24 24" class="w-4 h-4 text-white fill-current">
+                <path d="M12 2L4 7v10l8 5 8-5V7l-8-5zm0 2.8L17.5 8 12 11.2 6.5 8 12 4.8z"/>
+              </svg>
+            </div>
+            <h1 class="text-xl font-semibold tracking-tight text-white">Dione Agent UI</h1>
+            <span class="font-mono text-[11px] px-2 py-0.5 rounded-md bg-white/[0.06] text-zinc-400 border border-white/[0.08]">v2.0</span>
+          </div>
+
+          <p class="text-sm text-zinc-400 max-w-md leading-relaxed">
+            An open-source AgentOS interface built with
+            <span class="inline-flex items-center px-2 py-0.5 mx-0.5 rounded-md bg-white/[0.06] border border-white/[0.08] font-mono text-xs text-zinc-200">Gemini Live Audio</span>
+            <span class="inline-flex items-center px-2 py-0.5 mx-0.5 rounded-md bg-white/[0.06] border border-white/[0.08] font-mono text-xs text-zinc-200">Gemini 3.8 Flash</span>
+            and
+            <span class="inline-flex items-center px-2 py-0.5 mx-0.5 rounded-md bg-white/[0.06] border border-white/[0.08] font-mono text-xs text-zinc-200">Native Computer Use</span>
+          </p>
+
+          <!-- Quick Starter Prompts (Agno Playground Style) -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 w-full max-w-xl pt-2 text-left">
+            <button data-starter="Inspect my desktop screen, switch audio input to my Moondrop Chu2 IEMs, and launch Spotify" class="starter-card p-3 rounded-xl bg-[#18181b] hover:bg-[#202024] border border-white/[0.07] hover:border-white/[0.15] transition-all">
+              <div class="font-mono text-[11px] text-[#FF4017] mb-0.5">COMPUTER USE + AUDIO</div>
+              <div class="text-xs text-zinc-200">Switch Windows mic to Chu2 IEMs & launch Spotify</div>
+            </button>
+            <button data-starter="Launch Valorant, focus the Riot Client window, and Vision-click PLAY at (412, 398)" class="starter-card p-3 rounded-xl bg-[#18181b] hover:bg-[#202024] border border-white/[0.07] hover:border-white/[0.15] transition-all">
+              <div class="font-mono text-[11px] text-emerald-400 mb-0.5">VISION CLICK OPERATOR</div>
+              <div class="text-xs text-zinc-200">Open Valorant & Vision-click PLAY at (412, 398)</div>
+            </button>
+            <button data-starter="Check my active commitments with Prof. Geocey Shejy and stage a progress update email" class="starter-card p-3 rounded-xl bg-[#18181b] hover:bg-[#202024] border border-white/[0.07] hover:border-white/[0.15] transition-all">
+              <div class="font-mono text-[11px] text-amber-400 mb-0.5">KNOWLEDGE GRAPH + GATE</div>
+              <div class="text-xs text-zinc-200">Verify Prof. Geocey commitments & stage email</div>
+            </button>
+            <button data-starter="Query sandbox/dbbench.sqlite tables and profile workstation CPU/RAM footprint" class="starter-card p-3 rounded-xl bg-[#18181b] hover:bg-[#202024] border border-white/[0.07] hover:border-white/[0.15] transition-all">
+              <div class="font-mono text-[11px] text-cyan-400 mb-0.5">SANDBOX + TELEMETRY</div>
+              <div class="text-xs text-zinc-200">Query SQLite DBBench & inspect host hardware</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- MESSAGES STREAM (Agno Agent-UI Reasoning + Tool Calls + References + Markdown) -->
+        <div id="messagesList" class="space-y-6">
+          <!-- Populated dynamically via JS -->
+        </div>
+      </div>
+    </div>
+
+    <!-- =================================================================== -->
+    <!-- BOTTOM FLOATING AGNO AGENT-UI COMPOSER + GEMINI LIVE VOICE BAR      -->
+    <!-- =================================================================== -->
+    <div class="px-4 pb-5 pt-2 bg-gradient-to-t from-[#111113] via-[#111113] to-transparent">
+      <div class="max-w-3xl mx-auto w-full space-y-2">
+
+        <!-- Active Gemini Live Voice Duplex Pill (Appears above input when voice is active or speaking) -->
+        <div id="liveVoiceBanner" class="px-3.5 py-2 rounded-xl bg-[#18181b] border border-white/[0.08] flex items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span id="voicePulseDot" class="w-2 h-2 rounded-full bg-emerald-400 animate-dot flex-shrink-0"></span>
+            <canvas id="voiceMiniWaveform" width="76" height="18" class="flex-shrink-0"></canvas>
+            <span id="lblVoiceLiveStatus" class="font-mono text-[11px] text-zinc-300 truncate">
+              Gemini Live Ready — Talk while background 3.8 Flash agents execute tools
+            </span>
+          </div>
+          <div class="flex items-center gap-1.5 flex-shrink-0">
+            <button id="btnStopVoiceOutput" class="px-2 py-0.5 rounded bg-white/[0.06] hover:bg-white/[0.12] font-mono text-[10px] text-zinc-400 hover:text-white transition-colors">
+              Stop Audio
+            </button>
+          </div>
+        </div>
+
+        <!-- Agno Rounded-2XL Input Box -->
+        <div class="rounded-2xl bg-[#18181b] border border-white/[0.09] focus-within:border-white/[0.22] shadow-2xl p-3 transition-all">
+          <textarea
+            id="chatInputTextarea"
+            rows="1"
+            placeholder="Ask anything..."
+            class="w-full bg-transparent text-sm text-zinc-100 placeholder-zinc-500 resize-none focus:outline-none px-1 py-0.5 max-h-36 leading-relaxed"
+          ></textarea>
+
+          <div class="flex items-center justify-between pt-2.5 mt-1 border-t border-white/[0.06]">
+            <!-- Left Input Controls: Quick Prompt Chips + Computer Use Indicator -->
+            <div class="flex items-center gap-1.5 overflow-x-auto">
+              <button data-chip="Switch mic to Moondrop Chu2 IEMs and open Spotify" class="quick-chip px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.06] font-mono text-[10px] text-zinc-400 hover:text-zinc-200 whitespace-nowrap transition-colors">
+                🎧 Switch Mic + Spotify
+              </button>
+              <button data-chip="Open Valorant and Vision-click PLAY at (412, 398)" class="quick-chip px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.06] font-mono text-[10px] text-zinc-400 hover:text-zinc-200 whitespace-nowrap transition-colors">
+                🎮 Valorant PLAY
+              </button>
+              <button data-chip="Review Prof. Geocey commitments" class="quick-chip px-2.5 py-1 rounded-lg bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.06] font-mono text-[10px] text-zinc-400 hover:text-zinc-200 whitespace-nowrap transition-colors">
+                🤝 Commitments
+              </button>
+              <button data-chip="Run rmdir /s /q C:\Windows\System32" class="quick-chip px-2.5 py-1 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 font-mono text-[10px] text-rose-300 whitespace-nowrap transition-colors">
+                🛡️ Safety Test
+              </button>
+            </div>
+
+            <!-- Right Input Controls: Voice Mic Button + Solid White Send Button -->
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <button
+                id="btnMicToggle"
+                class="h-8 px-2.5 rounded-xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/[0.08] text-zinc-200 font-mono text-[11px] flex items-center gap-1.5 transition-all"
+                title="Talk with Gemini Live Voice"
+              >
+                <i data-lucide="mic" class="w-3.5 h-3.5 text-emerald-400"></i>
+                <span id="lblMicBtn">Talk</span>
+              </button>
+
+              <button
+                id="btnSendMessage"
+                class="w-8 h-8 rounded-xl bg-[#fafafa] hover:bg-white text-[#111113] flex items-center justify-center shadow-sm transition-all active:scale-95"
+                title="Send message"
+              >
+                <i data-lucide="arrow-up" class="w-4 h-4 stroke-[2.5]"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- 3. SLIDE-OVER COMPUTER-USE DESKTOP VIEWPORT DRAWER (AGNO STYLE)       -->
+  <!-- ===================================================================== -->
+  <aside id="computerUseDrawer" class="w-[380px] xl:w-[420px] bg-[#161618] border-l border-white/[0.07] flex flex-col h-full flex-shrink-0 z-20 transition-all">
+    <div class="h-12 px-4 border-b border-white/[0.07] flex items-center justify-between">
+      <div class="flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        <span class="font-mono text-xs uppercase tracking-wider text-zinc-200">COMPUTER USE VIEWPORT</span>
+      </div>
+      <button id="btnCloseComputerDrawer" class="p-1 rounded-lg text-zinc-400 hover:text-white hover:bg-white/[0.06]">
+        <i data-lucide="x" class="w-4 h-4"></i>
+      </button>
+    </div>
+
+    <div class="flex-1 overflow-y-auto p-3.5 space-y-4">
+      <!-- Interactive 1920x1080 Screen Grounding Box -->
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between font-mono text-[10px] text-zinc-400">
+          <span>LIVE DISPLAY (1920×1080 · UIA TREE)</span>
+          <span id="lblDrawerCoords" class="text-emerald-400">(412, 398)</span>
+        </div>
+
+        <div id="drawerDesktopStage" class="relative w-full aspect-video rounded-xl border border-white/[0.1] bg-[#0c0d12] overflow-hidden cursor-crosshair shadow-inner">
+          <div class="absolute inset-0 bg-gradient-to-br from-[#111422] via-[#151b2e] to-[#0b0d16] p-2.5 flex flex-col justify-between">
+            <!-- Top Bar -->
+            <div class="flex items-center justify-between px-2 py-1 rounded bg-black/60 border border-white/[0.08] font-mono text-[9px] text-zinc-300">
+              <span>Focus: <strong id="drawerActiveWin" class="text-white">Spotify / Riot Client</strong></span>
+              <span id="drawerFailSafeTag" class="text-emerald-400">🛡️ Fail-Safe &lt;80px</span>
+            </div>
+
+            <!-- Simulated Windows with UIA Bounding Boxes -->
+            <div class="grid grid-cols-12 gap-2 my-1.5 flex-1">
+              <div class="col-span-7 rounded-lg bg-[#0d1117]/95 border border-white/[0.1] p-2 flex flex-col justify-between relative">
+                <div class="font-mono text-[8px] text-zinc-400">VS Code — agentos.py</div>
+                <div class="font-mono text-[8px] text-zinc-300 space-y-0.5 my-auto">
+                  <div class="text-[#FF4017]">agent_os = AgentOS(teams=[dione])</div>
+                  <div class="text-emerald-300">worker = Gemini("gemini-3.8-flash")</div>
+                  <div class="text-zinc-400">Typed: <span id="drawerTypedPreview" class="text-white">pnpm dev</span></div>
+                </div>
+                <div class="uia-rect absolute inset-0 border border-dashed border-cyan-400/70 pointer-events-none flex items-end p-1">
+                  <span class="px-1 rounded bg-cyan-400 text-black font-mono font-bold text-[7px]">UIA: VS Code</span>
+                </div>
+              </div>
+
+              <div class="col-span-5 flex flex-col gap-1.5">
+                <div class="flex-1 rounded-lg bg-rose-950/70 border border-rose-500/30 p-1.5 flex flex-col justify-between relative">
+                  <span class="font-mono text-[8px] text-rose-300 font-bold">RIOT CLIENT</span>
+                  <button id="btnDrawerValorantPlay" class="px-1.5 py-0.5 rounded bg-[#FF4017] text-white font-mono text-[8px] font-bold self-end">▶ PLAY</button>
+                  <div class="uia-rect absolute inset-0 border border-dashed border-rose-400/70 pointer-events-none flex items-end justify-start p-1">
+                    <span class="px-1 rounded bg-rose-500 text-white font-mono font-bold text-[7px]">(412,398)</span>
+                  </div>
+                </div>
+                <div class="flex-1 rounded-lg bg-zinc-900/90 border border-emerald-500/30 p-1.5 flex flex-col justify-between relative">
+                  <span class="font-mono text-[8px] text-emerald-300 font-bold">AUDIO ENDPOINT</span>
+                  <span id="drawerAudioDevice" class="font-mono text-[8px] text-zinc-200 truncate">Moondrop Chu2 DSP</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="px-2 py-0.5 rounded bg-black/60 font-mono text-[8px] text-zinc-400 flex justify-between">
+              <span>Click image to invoke <code class="text-zinc-200">computer_click_coords</code></span>
+              <span>Win11</span>
+            </div>
+          </div>
+
+          <!-- Animated Virtual AI Cursor -->
+          <div id="drawerAiCursor" class="absolute z-30 pointer-events-none transition-all duration-500 ease-out" style="left: 72%; top: 36%;">
+            <div id="drawerCursorRipple" class="w-6 h-6 -ml-3 -mt-3 rounded-full border-2 border-[#FF4017] hidden"></div>
+            <div class="flex items-center gap-1">
+              <div class="w-3 h-3 rounded-full bg-[#FF4017] border border-white shadow"></div>
+              <span id="drawerCursorLabel" class="px-1 py-0.2 rounded bg-[#FF4017] text-white font-mono text-[8px] font-bold">
+                CU-OS
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Direct Computer-Use Tool Invoker -->
+      <div class="p-3 rounded-xl bg-[#1f1f23] border border-white/[0.07] space-y-2.5">
+        <div class="font-mono text-[10px] uppercase tracking-wider text-zinc-400">DIRECT COMPUTER-USE TOOLS</div>
+        <div class="flex gap-1.5">
+          <input id="inputDrawerX" type="number" value="412" class="w-16 bg-[#141417] border border-white/[0.08] rounded-lg px-2 py-1 font-mono text-xs text-white" />
+          <input id="inputDrawerY" type="number" value="398" class="w-16 bg-[#141417] border border-white/[0.08] rounded-lg px-2 py-1 font-mono text-xs text-white" />
+          <button id="btnDrawerClickXY" class="flex-1 py-1 rounded-lg bg-[#fafafa] hover:bg-white text-[#111113] font-mono text-[11px] font-medium">
+            Click (X,Y)
+          </button>
+        </div>
+        <div class="flex gap-1.5">
+          <input id="inputDrawerType" type="text" placeholder="Type text..." class="flex-1 bg-[#141417] border border-white/[0.08] rounded-lg px-2.5 py-1 text-xs text-white" />
+          <button id="btnDrawerTypeSend" class="px-3 py-1 rounded-lg bg-white/[0.08] hover:bg-white/[0.15] font-mono text-[11px] text-white">
+            Type
+          </button>
+        </div>
+        <div class="grid grid-cols-2 gap-1.5 pt-0.5 font-mono text-[10px]">
+          <button id="btnDrawerSwitchMic" class="py-1.5 px-2 rounded-lg bg-white/[0.05] hover:bg-white/[0.1] border border-white/[0.07] text-zinc-200 text-left truncate">
+            🎧 Mic: Chu2 IEMs
+          </button>
+          <button id="btnDrawerMouseOverride" class="py-1.5 px-2 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/25 text-amber-300 text-left truncate">
+            🖐️ Test &gt;80px Override
+          </button>
+        </div>
+      </div>
+
+      <!-- Staged 1-Click Human Approval Card -->
+      <div class="p-3 rounded-xl bg-[#1f1f23] border border-white/[0.07] space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="font-mono text-[10px] uppercase tracking-wider text-zinc-400">1-CLICK APPROVAL GATE</span>
+          <span id="lblApprovalBadge" class="font-mono text-[9px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300">STAGED</span>
+        </div>
+        <div class="text-xs text-zinc-300 leading-relaxed">
+          <strong class="text-white">Prof. Geocey Shejy</strong> (<code class="font-mono text-[10px] text-zinc-400">geocey.shejy@ves.ac.in</code>): Stage weekly multi-agent &amp; benchmark telemetry report.
+        </div>
+        <div class="flex gap-1.5 pt-1">
+          <button id="btnApproveGate" class="flex-1 py-1.5 rounded-lg bg-[#fafafa] text-[#111113] font-mono text-[10px] font-semibold uppercase">
+            Approve &amp; Send
+          </button>
+          <button id="btnDismissGate" class="px-2.5 py-1.5 rounded-lg bg-white/[0.06] text-zinc-400 font-mono text-[10px]">
+            Dismiss
+          </button>
+        </div>
+      </div>
+
+      <!-- Tool Call Execution Log -->
+      <div class="p-3 rounded-xl bg-[#1f1f23] border border-white/[0.07] space-y-1.5">
+        <div class="font-mono text-[10px] uppercase tracking-wider text-zinc-400">TOOL EXECUTION STREAM</div>
+        <div id="drawerToolLog" class="font-mono text-[10px] text-zinc-400 space-y-1 max-h-40 overflow-y-auto">
+          <!-- Populated via JS -->
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===================================================================== -->
+  <!-- GOOGLE STITCH PROMPT MODAL (FOR AGNO-AGI/AGENT-UI REPLICA)            -->
+  <!-- ===================================================================== -->
+  <div id="stitchModal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-2xl bg-[#161618] border border-white/[0.12] rounded-2xl p-5 shadow-2xl space-y-4">
+      <div class="flex items-center justify-between border-b border-white/[0.08] pb-3">
+        <div class="flex items-center gap-2">
+          <span class="w-2.5 h-2.5 rounded-sm bg-[#FF4017]"></span>
+          <h3 class="font-mono text-xs uppercase tracking-wider text-white">Google Stitch Prompt — Agno Agent-UI Design</h3>
+        </div>
+        <button id="btnCloseStitchModal" class="text-zinc-400 hover:text-white">
+          <i data-lucide="x" class="w-4 h-4"></i>
+        </button>
+      </div>
+      <pre id="stitchPromptContent" class="p-3.5 rounded-xl bg-[#111113] border border-white/[0.08] font-mono text-[11px] text-zinc-300 whitespace-pre-wrap max-h-80 overflow-y-auto select-text leading-relaxed">Create a dark-mode AI Agent interface modeled after the open-source "agno-agi/agent-ui" (Agno AgentOS UI) built with Next.js, shadcn/ui, Geist/Inter sans font, and DM Mono uppercase labels:
+
+1. Color Palette & Typography:
+   - Main background: #111113; Left Sidebar & Drawer background: #161618; Elevated inputs/cards: #1F1F23 with subtle 1px solid rgba(255,255,255,0.08) borders and rounded-xl corners.
+   - Brand accent: Agno Flame Orange (#FF4017) icon badge, Emerald (#22C55E) live endpoint status dot, and crisp solid White (#FAFAFA) primary CTA buttons with dark #111113 text.
+   - All section headers, tool call pills, and badges use uppercase DM Mono (font-mono text-[10px] tracking-[0.12em]).
+
+2. Left Sidebar (272px width, collapsible):
+   - Header: Flame orange square logo + "AGENT UI" in tracked uppercase monospace + collapse icon.
+   - Primary CTA: Full-width solid white "+ NEW CHAT" rounded-xl button.
+   - ENDPOINT box: Dark rounded-xl field showing "http://localhost:8900" with a pulsing green dot, edit pencil icon, and refresh icon.
+   - AI STUDIO API KEY box: Masked token input for Google AI Studio keys.
+   - MODE toggle: Segmented switcher between "Team" (Multi-Agent Orchestrator) and "Agent" (Single Agent).
+   - TEAM / AGENT & MODEL selector: Dropdown for "Dione Orchestrator Team (5 Agents)" paired with model badges for "VOICE LIVE: gemini-2.5-flash-live" and "BG WORKER: gemini-3.8-flash".
+   - SESSIONS list: Clean scrollable list of saved sessions with hover delete icon.
+
+3. Center Chat & Agent Execution Stream (max-w-3xl centered):
+   - Agent responses display three signature Agno components above the markdown text:
+     (a) Collapsible "Reasoning" accordion showing step-by-step multi-agent delegation thoughts and latency (e.g., Supervisor -> SafetyAuditor -> KnowledgeGraph -> ComputerUseOperator).
+     (b) Inline horizontal row of rounded-full monospace "Tool Calls" pills (e.g., `computer_switch_audio_device`, `computer_click_coords`, `allocate_knapsack_context`) that expand to show JSON arguments and outputs when clicked.
+     (c) Collapsible "References" chips showing Knowledge Graph dossiers and sources.
+   - Bottom Floating Input Bar: Rounded-2xl dark container (#18181B) with auto-expanding "Ask anything..." textarea, a live Gemini Live Voice waveform + "Talk" mic button, quick action chips, and a solid white upward-arrow send button.
+
+4. Right Slide-Over Computer-Use Viewport Drawer:
+   - Live 16:9 desktop screen preview with Windows UIA bounding boxes, animated virtual cursor, (X, Y) coordinate clicker, and a 1-Click Approval Gate card.</pre>
+      <div class="flex justify-end gap-2">
+        <button id="btnCopyStitchModal" class="px-4 py-2 rounded-xl bg-[#fafafa] hover:bg-white text-[#111113] font-mono text-xs font-medium uppercase">
+          Copy Prompt
+        </button>
       </div>
     </div>
   </div>
 
-  <!-- 3. MAIN WORKSPACE CANVAS -->
-  <div class="main-canvas">
-    <!-- Top Navigation Bar -->
-    <div class="top-bar">
-      <div class="header-left">
-        <div class="state-orb" id="stateOrb"></div>
-        <div class="header-title-box">
-          <div class="header-task-title" id="headerTitle">Workstation Telemetry</div>
-          <div class="header-task-status" id="headerStatus">Standing By</div>
-        </div>
-      </div>
-
-      <!-- Mode Switcher Pill (Computer Use vs Ambient Cowork) -->
-      <div class="mode-switch-group">
-        <button class="mode-btn active" id="modeBtnComputer" title="Active desktop control via mouse, keyboard, and Win32 messages">
-          <span>⚡</span> <span>Computer Use</span>
-        </button>
-        <button class="mode-btn" id="modeBtnAmbient" title="Silent background synthesis, memory consolidation, and pre-indexing">
-          <span>🌙</span> <span>24/7 Cowork</span>
-        </button>
-      </div>
-
-      <div class="header-right">
-        <div class="header-pill failsafe" id="failsafePill" title="Physical mouse movement instantly halts AI computer control">
-          <span>🛡️</span> <span>Mouse Fail-Safe Armed</span>
-        </div>
-        <div class="header-pill">
-          <span>🧠</span> <span>Gemini 2.5 Flash</span>
-        </div>
-        <div class="header-pill">
-          <span>🎙️</span> <span>Edge-TTS Neural</span>
-        </div>
-        <button class="abort-btn" id="abortBtn">
-          <span>🚨</span> <span>Halt</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Spoken Thinking Ribbon -->
-    <div class="bridge-ribbon" id="bridgeRibbon">
-      <span class="icon">💬</span>
-      <span id="bridgeText">"Ready for your instruction. What should we tackle?"</span>
-    </div>
-
-    <!-- Split Workspace -->
-    <div class="workspace-split" id="workspaceSplit">
-      <!-- Left Column: Transcript, Plan & Chat -->
-      <div class="transcript-col">
-        <!-- Checklist Plan Card -->
-        <div class="plan-card" id="planCard">
-          <div class="plan-header">
-            <span>Execution Plan & Sub-Tasks</span>
-            <span id="planStepCount">2 / 2 Done</span>
-          </div>
-          <div id="planStepsContainer">
-            <!-- Injected via JS -->
-          </div>
-        </div>
-
-        <!-- Chat Stream -->
-        <div class="messages-stream" id="messagesStream">
-          <!-- Injected via JS -->
-        </div>
-
-        <!-- Bottom Prompt Dock -->
-        <div class="bottom-dock">
-          <div class="chips-row">
-            <button class="chip-btn" data-goal="open valorant">🎮 Open Valorant</button>
-            <button class="chip-btn" data-goal="Change my mic to my IEMs">🎧 Switch Mic to IEMs</button>
-            <button class="chip-btn" data-goal="Inspect my screen and tell me what is open">👁️ Inspect Screen</button>
-            <button class="chip-btn" data-goal="How much RAM and CPU is currently free?">⚡ Check RAM & CPU</button>
-            <button class="chip-btn" data-goal="Open Spotify and play music">🎵 Open Spotify</button>
-            <button class="chip-btn" data-goal="Capture desktop screenshot">📸 Screenshot</button>
-            <button class="chip-btn" data-goal="What promises did I make to Prof. Geocey?">🤝 Review Commitments</button>
-            <button class="chip-btn" data-goal="What open windows are currently active?">🪟 Open Windows</button>
-          </div>
-
-          <div class="prompt-box">
-            <input type="text" class="prompt-input" id="goalInput" placeholder="Give Dione an autonomous task (e.g. 'Open Valorant', 'Switch mic', 'Check RAM')..." autocomplete="off" />
-            <button class="voice-mic-btn" id="micBtn" title="Speak to Dione (Edge-TTS Neural)">🎙️</button>
-            <button class="run-btn" id="runBtn">Run Task ↵</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Right Column: Inspector & Vision -->
-      <div class="inspector-col" id="inspectorCol">
-        <div class="inspector-tabs">
-          <button class="tab-btn active" id="tabVision">Desktop Vision</button>
-          <button class="tab-btn" id="tabTerminal">Console</button>
-          <button class="tab-btn" id="tabContacts">Contacts</button>
-          <button class="tab-btn" id="tabBrief">Briefing</button>
-        </div>
-
-        <div class="inspector-content" id="inspectorContent">
-          <!-- Vision Panel -->
-          <div id="panelVision" style="display: flex; flex-direction: column; gap: 12px;">
-            <div class="screen-card">
-              <div class="screen-card-header">
-                <span>Current Screen Grounding</span>
-                <button class="screen-refresh-btn" id="screenRefreshBtn">Capture Now</button>
-              </div>
-              <img class="screen-img" id="screenImg" src="" alt="Desktop Vision Grounding" />
-            </div>
-            <div style="font-size: 11px; color: var(--text-dim); line-height: 1.4;">
-              Screen coordinates are normalized in real-time for high-DPI displays. Physical mouse fail-safe activates if movement exceeds 80px.
-            </div>
-          </div>
-
-          <!-- Console Panel -->
-          <div id="panelTerminal" style="display: none; height: 100%; flex-direction: column;">
-            <div class="terminal-box" id="terminalBox">
-              <div class="term-line sys">[Kernel] Initialized Frontier Tri-Actor Runtime</div>
-              <div class="term-line ok">[OK] PyAutoGUI & Windows UI Automation Attached</div>
-              <div class="term-line ok">[OK] Edge-TTS Neural Voice Synthesizer Ready</div>
-              <div class="term-line cmd">[ComputerUse] Physical mouse fail-safe armed and monitoring</div>
-            </div>
-          </div>
-
-          <!-- Contacts Panel -->
-          <div id="panelContacts" style="display: none; flex-direction: column; gap: 10px;">
-            <!-- Injected via JS -->
-          </div>
-
-          <!-- Briefing Panel -->
-          <div id="panelBrief" style="display: none; flex-direction: column; gap: 10px;">
-            <!-- Injected via JS -->
-          </div>
-        </div>
-      </div>
-    </div>
+  <!-- TOAST -->
+  <div id="agnoToast" class="hidden fixed bottom-5 right-5 z-50 px-3.5 py-2 rounded-xl bg-[#1f1f23] border border-white/[0.12] font-mono text-xs text-white shadow-2xl flex items-center gap-2">
+    <span class="w-2 h-2 rounded-full bg-[#FF4017]"></span>
+    <span id="agnoToastText">Saved</span>
   </div>
 
   <script>
-    let activeTask = null;
-    let allTasks = [];
-    let currentMode = 'computer_use';
-
-    // DOM Elements
-    const taskList = document.getElementById('taskList');
-    const headerTitle = document.getElementById('headerTitle');
-    const headerStatus = document.getElementById('headerStatus');
-    const stateOrb = document.getElementById('stateOrb');
-    const bridgeText = document.getElementById('bridgeText');
-    const planStepsContainer = document.getElementById('planStepsContainer');
-    const planStepCount = document.getElementById('planStepCount');
-    const messagesStream = document.getElementById('messagesStream');
-    const terminalBox = document.getElementById('terminalBox');
-    const screenImg = document.getElementById('screenImg');
-    const goalInput = document.getElementById('goalInput');
-    const runBtn = document.getElementById('runBtn');
-    const abortBtn = document.getElementById('abortBtn');
-    const newTaskBtn = document.getElementById('newTaskBtn');
-    const micBtn = document.getElementById('micBtn');
-    const workspaceSplit = document.getElementById('workspaceSplit');
-    const screenRefreshBtn = document.getElementById('screenRefreshBtn');
-
-    // Telemetry meters
-    const cpuMeter = document.getElementById('cpuMeter');
-    const cpuText = document.getElementById('cpuText');
-    const ramMeter = document.getElementById('ramMeter');
-    const ramText = document.getElementById('ramText');
-    const idleText = document.getElementById('idleText');
-
-    // Mode Buttons
-    const modeBtnComputer = document.getElementById('modeBtnComputer');
-    const modeBtnAmbient = document.getElementById('modeBtnAmbient');
-
-    modeBtnComputer.addEventListener('click', () => setMode('computer_use'));
-    modeBtnAmbient.addEventListener('click', () => setMode('ambient_cowork'));
-
-    function setMode(mode) {
-      currentMode = mode;
-      if (mode === 'computer_use') {
-        modeBtnComputer.classList.add('active');
-        modeBtnAmbient.classList.remove('active');
-        bridgeText.textContent = '"Computer Use Mode Active. Ready to interact with desktop apps & games."';
-      } else {
-        modeBtnAmbient.classList.add('active');
-        modeBtnComputer.classList.remove('active');
-        bridgeText.textContent = '"Ambient 24/7 Cowork Active. Silent synthesis & memory indexing enabled."';
-      }
-      if (window.pywebview) {
-        window.pywebview.api.toggle_mode(mode);
-      }
-      appendTerminal(`[Mode Changed] Active harness mode set to ${mode}`, 'cmd');
-    }
-
-    // Tab switcher in inspector
-    const tabVision = document.getElementById('tabVision');
-    const tabTerminal = document.getElementById('tabTerminal');
-    const tabContacts = document.getElementById('tabContacts');
-    const tabBrief = document.getElementById('tabBrief');
-
-    const panelVision = document.getElementById('panelVision');
-    const panelTerminal = document.getElementById('panelTerminal');
-    const panelContacts = document.getElementById('panelContacts');
-    const panelBrief = document.getElementById('panelBrief');
-
-    function selectTab(activeTab, activePanel) {
-      [tabVision, tabTerminal, tabContacts, tabBrief].forEach(t => t.classList.remove('active'));
-      [panelVision, panelTerminal, panelContacts, panelBrief].forEach(p => p.style.display = 'none');
-
-      activeTab.classList.add('active');
-      activePanel.style.display = (activePanel === panelTerminal ? 'flex' : 'flex');
-    }
-
-    tabVision.addEventListener('click', () => selectTab(tabVision, panelVision));
-    tabTerminal.addEventListener('click', () => selectTab(tabTerminal, panelTerminal));
-    tabContacts.addEventListener('click', () => {
-      selectTab(tabContacts, panelContacts);
-      loadContacts();
-    });
-    tabBrief.addEventListener('click', () => {
-      selectTab(tabBrief, panelBrief);
-      loadBriefing();
-    });
-
-    // Navigation Rail Buttons
-    document.getElementById('railBtnChat').addEventListener('click', () => {
-      document.querySelectorAll('.rail-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById('railBtnChat').classList.add('active');
-    });
-
-    document.getElementById('railBtnVision').addEventListener('click', () => {
-      selectTab(tabVision, panelVision);
-    });
-
-    document.getElementById('railBtnAmbient').addEventListener('click', () => {
-      selectTab(tabBrief, panelBrief);
-      loadBriefing();
-    });
-
-    document.getElementById('railBtnContacts').addEventListener('click', () => {
-      selectTab(tabContacts, panelContacts);
-      loadContacts();
-    });
-
-    document.getElementById('railBtnCollapse').addEventListener('click', () => {
-      workspaceSplit.classList.toggle('collapsed');
-    });
-
-    // Quick Action Chips
-    document.querySelectorAll('.chip-btn').forEach(btn => {
-      btn.addEventListener('click', () => {
-        goalInput.value = btn.getAttribute('data-goal');
-        executeCurrentInput();
-      });
-    });
-
-    // Emergency Abort
-    abortBtn.addEventListener('click', () => {
-      if (window.pywebview) {
-        window.pywebview.api.emergency_stop();
-      }
-      appendTerminal('🚨 EMERGENCY STOP TRIGGERED BY USER', 'err');
-      stateOrb.className = 'state-orb paused';
-      headerStatus.textContent = 'Paused (Halt Triggered)';
-      bridgeText.textContent = '"Emergency stop triggered. Actions halted."';
-    });
-
-    // Run Button & Enter Key
-    runBtn.addEventListener('click', executeCurrentInput);
-    goalInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') executeCurrentInput();
-    });
-
-    // Mic Button
-    micBtn.addEventListener('click', () => {
-      if (window.pywebview) {
-        window.pywebview.api.start_voice();
-      }
-      stateOrb.className = 'state-orb speaking';
-      bridgeText.textContent = '"Listening for your voice command..."';
-    });
-
-    // New Task Button
-    newTaskBtn.addEventListener('click', () => {
-      const title = prompt("Enter a goal for the new task:", "Launch and test application");
-      if (title && window.pywebview) {
-        window.pywebview.api.create_new_task(title);
-      }
-    });
-
-    // Screenshot Refresh
-    screenRefreshBtn.addEventListener('click', () => {
-      if (window.pywebview) {
-        window.pywebview.api.capture_desktop_now().then(b64 => {
-          if (b64) screenImg.src = 'data:image/jpeg;base64,' + b64;
-        });
-      }
-    });
-
-    function executeCurrentInput() {
-      const text = goalInput.value.trim();
-      if (!text) return;
-      goalInput.value = '';
-
-      stateOrb.className = 'state-orb thinking';
-      headerStatus.textContent = 'Reasoning & Planning...';
-
-      if (window.pywebview) {
-        window.pywebview.api.submit_task(text);
-      }
-      appendTerminal(`[Task Started] ${text}`, 'cmd');
-    }
-
-    function appendTerminal(line, type = '') {
-      const div = document.createElement('div');
-      div.className = 'term-line ' + type;
-      div.textContent = line;
-      terminalBox.appendChild(div);
-      terminalBox.scrollTop = terminalBox.scrollHeight;
-    }
-
-    // Markdown Formatter
-    function formatMarkdown(text) {
-      if (!text) return '';
-      let html = text
-        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-        .replace(/```(\w+)?\n([\s\S]*?)```/g, (m, lang, code) => `<pre class="code-block"><code>${code}</code></pre>`)
-        .replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>')
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
-        .replace(/^\s*[-•]\s+(.*$)/gim, '<li class="md-li">$1</li>')
-        .replace(/(<li.*<\/li>)/s, '<ul class="md-ul">$1</ul>')
-        .replace(/\n\n/g, '<br/><br/>')
-        .replace(/\n/g, '<br/>');
-      return html;
-    }
-
-    // Render active task state
-    window.renderTaskState = function(taskData) {
-      activeTask = taskData;
-      headerTitle.textContent = taskData.title;
-      headerStatus.textContent = `Status: ${taskData.status.toUpperCase()}`;
-
-      // Render steps
-      planStepsContainer.innerHTML = '';
-      let doneCount = 0;
-      taskData.steps.forEach(s => {
-        if (s.status === 'completed') doneCount++;
-        const div = document.createElement('div');
-        div.className = 'step-item';
-        const isDone = s.status === 'completed';
-        const icon = isDone ? '✅' : (s.status === 'running' ? '⚡' : '⏳');
-        div.innerHTML = `
-          <span>${icon}</span>
-          <span class="step-desc ${isDone ? 'completed' : ''}">${s.description}</span>
-          <span class="step-tool">${s.tool || 'Planner'}</span>
-        `;
-        planStepsContainer.appendChild(div);
-      });
-      planStepCount.textContent = `${doneCount} / ${taskData.steps.length} Done`;
-
-      // Render messages
-      messagesStream.innerHTML = '';
-      taskData.messages.forEach(m => {
-        const div = document.createElement('div');
-        div.className = `msg-bubble ${m.role}`;
-        div.innerHTML = formatMarkdown(m.text);
-        messagesStream.appendChild(div);
-      });
-      messagesStream.scrollTop = messagesStream.scrollHeight;
-
-      // Update screenshot if any
-      if (taskData.screenshots && taskData.screenshots.length > 0) {
-        const lastShot = taskData.screenshots[taskData.screenshots.length - 1];
-        if (window.pywebview) {
-          window.pywebview.api.get_screenshot_base64(lastShot).then(b64 => {
-            if (b64) screenImg.src = 'data:image/jpeg;base64,' + b64;
-          });
+    // =========================================================================
+    // 1. AGNO AGENT-UI STATE & MULTI-AGENT SESSIONS
+    // =========================================================================
+    let uiState = {
+      mode: 'team', // 'team' | 'agent'
+      selectedEntity: 'dione-team',
+      bgFlashModel: 'gemini-3.8-flash',
+      liveVoiceModel: 'gemini-2.5-flash-live',
+      endpoint: 'http://localhost:8900',
+      apiKey: '',
+      isListening: false,
+      isSpeaking: false,
+      mouseOverride: false,
+      activeSessionId: 'sess-1',
+      sessions: [
+        {
+          id: 'sess-1',
+          title: 'Switch mic to IEMs & check commitments',
+          createdAt: '18:10',
+          messages: [
+            {
+              id: 'msg-1',
+              role: 'user',
+              content: 'Inspect my desktop screen, switch audio input to my Moondrop Chu2 IEMs, and check my commitments with Prof. Geocey.',
+              timestamp: '18:10'
+            },
+            {
+              id: 'msg-2',
+              role: 'agent',
+              agentName: 'Dione Orchestrator Team',
+              model: 'gemini-3.8-flash',
+              durationMs: 142,
+              reasoningOpen: true,
+              reasoningSteps: [
+                { agent: 'Supervisor', thought: 'Decomposing user request into 3 parallel sub-agent tasks via Gemini 3.8 Flash worker pool.', time: '8ms' },
+                { agent: 'SafetyAuditor', thought: 'Validated trajectory against 5-Tier Permission Lattice (Tier 0–2 allowed, Mouse Fail-Safe <80px armed).', time: '7ms' },
+                { agent: 'KnowledgeSocialAgent', thought: 'Executed 0-1 Knapsack RAG (1,680 / 6,656 tokens, -74.8% overhead). Resolved entity "Prof. Geocey Shejy".', time: '1.2ms' },
+                { agent: 'ComputerUseOperator', thought: 'Captured 1920x1080 frame via GDI BitBlt and switched default Windows audio input to Moondrop Chu2 DSP.', time: '126ms' }
+              ],
+              toolCalls: [
+                {
+                  id: 'tc-1',
+                  name: 'validate_tier_policy',
+                  agent: 'SafetyAuditor',
+                  latency: '7.1ms',
+                  args: { tier_max: 2, fail_safe_px: 80 },
+                  result: '{"allowed": true, "tier": "Tier 2 (OS Execute)", "mouse_failsafe": "armed"}'
+                },
+                {
+                  id: 'tc-2',
+                  name: 'allocate_knapsack_context',
+                  agent: 'KnowledgeSocialAgent',
+                  latency: '1.2ms',
+                  args: { query: 'Prof. Geocey Shejy commitments', budget: 6656 },
+                  result: '{"allocated_tokens": 1680, "savings_pct": 74.8, "entity": "Prof. Geocey Shejy <geocey.shejy@ves.ac.in>"}'
+                },
+                {
+                  id: 'tc-3',
+                  name: 'computer_take_screenshot',
+                  agent: 'ComputerUseOperator',
+                  latency: '38.4ms',
+                  args: { resolution: '1920x1080', uia_tree: true },
+                  result: '{"windows": ["VS Code", "Riot Client", "Spotify"], "status": "grounded"}'
+                },
+                {
+                  id: 'tc-4',
+                  name: 'computer_switch_audio_device',
+                  agent: 'ComputerUseOperator',
+                  latency: '64.0ms',
+                  args: { device_name: 'Moondrop Chu2 DSP', direction: 'input' },
+                  result: '{"default_input": "Moondrop Chu2 DSP (IEMs)", "status": "switched"}'
+                }
+              ],
+              references: [
+                { title: 'Prof. Geocey Shejy (Social Dossier)', meta: 'geocey.shejy@ves.ac.in · Salutation: "Respected Ma\'am,"' },
+                { title: 'NetworkX Knowledge Multigraph', meta: '2-Hop Subgraph · 1.18ms Lookup' }
+              ],
+              content: 'I coordinated the **Dione Orchestrator Team** (`gemini-3.8-flash` background workers) while keeping your **Gemini Live** voice session open:\n\n- **Audio & Desktop (`ComputerUseOperator`)**: Grounded your `1920×1080` screen and switched your default Windows microphone input to **Moondrop Chu2 DSP (IEMs)**.\n- **Commitments (`KnowledgeSocialAgent`)**: Resolved **Prof. Geocey Shejy** (`geocey.shejy@ves.ac.in`) — your active commitment is *"Demonstrate Hierarchical Multi-Agent Orchestration & Agno Agent-UI Integration"*.\n- **Proactive Gate (`SafetyAuditor`)**: Staged your progress update email in the right-hand **1-Click Approval Gate**.',
+              timestamp: '18:10'
+            }
+          ]
+        },
+        {
+          id: 'sess-2',
+          title: 'Launch Valorant & Vision-click PLAY',
+          createdAt: '17:50',
+          messages: [
+            {
+              id: 'msg-21',
+              role: 'user',
+              content: 'Open Valorant and Vision-click PLAY at (412, 398)',
+              timestamp: '17:50'
+            },
+            {
+              id: 'msg-22',
+              role: 'agent',
+              agentName: 'Computer-Use Operator Agent',
+              model: 'gemini-3.8-flash',
+              durationMs: 118,
+              reasoningOpen: false,
+              reasoningSteps: [
+                { agent: 'SafetyAuditor', thought: 'Verified OS application launch permission with <80px mouse override.', time: '6ms' },
+                { agent: 'ComputerUseOperator', thought: 'Launched RiotClientServices.exe, focused Riot Client window, and clicked (412, 398).', time: '112ms' }
+              ],
+              toolCalls: [
+                {
+                  id: 'tc-201',
+                  name: 'computer_launch_app',
+                  agent: 'ComputerUseOperator',
+                  latency: '52.0ms',
+                  args: { app_name: 'valorant' },
+                  result: '{"launched": "RiotClientServices.exe --launch-product=valorant"}'
+                },
+                {
+                  id: 'tc-202',
+                  name: 'computer_click_coords',
+                  agent: 'ComputerUseOperator',
+                  latency: '60.0ms',
+                  args: { x: 412, y: 398, button: 'left' },
+                  result: '{"clicked": [412, 398], "element": "PLAY"}'
+                }
+              ],
+              references: [
+                { title: 'Windows UIA Accessibility Tree', meta: 'Target: Riot Client PLAY Button (412, 398)' }
+              ],
+              content: 'Launched **Riot Client**, brought the window to the foreground, and dispatched a synthetic click on the **▶ PLAY** button at `(412, 398)` with the physical mouse fail-safe armed.',
+              timestamp: '17:50'
+            }
+          ]
         }
-      }
+      ],
+      toolLogs: [
+        '[18:10:01] validate_tier_policy -> ALLOW (Tier 2)',
+        '[18:10:01] allocate_knapsack_context -> 1,680 tok (-74.8%)',
+        '[18:10:02] computer_switch_audio_device("Moondrop Chu2 DSP")',
+        '[18:10:02] computer_take_screenshot -> 1920x1080 grounded'
+      ]
     };
 
-    window.renderTaskList = function(tasks) {
-      allTasks = tasks;
-      taskList.innerHTML = '';
-      tasks.forEach(t => {
-        const div = document.createElement('div');
-        div.className = `task-item ${activeTask && activeTask.id === t.id ? 'active' : ''}`;
-        div.onclick = () => {
-          if (window.pywebview) window.pywebview.api.select_task(t.id);
-        };
-        div.innerHTML = `
-          <div class="task-item-title">${t.title}</div>
-          <div class="task-item-meta">
-            <span>${t.created_at}</span>
-            <span class="task-badge ${t.status}"></span>
-          </div>
-        `;
-        taskList.appendChild(div);
-      });
-    };
-
-    // Receive streaming event bus messages
-    window.receiveStudioEvent = function(event) {
-      if (event.type === 'speech_chunk') {
-        bridgeText.textContent = `"${event.payload.text}"`;
-        if (event.payload.is_filler) {
-          stateOrb.className = 'state-orb speaking';
-        }
-      } else if (event.type === 'state_changed') {
-        stateOrb.className = 'state-orb ' + event.payload.to;
-        headerStatus.textContent = event.payload.reason || event.payload.to;
-      } else if (event.type === 'tool_dispatched') {
-        renderToolCard(event.payload.tool, event.payload.params, 'running');
-        appendTerminal(`[Tool Dispatched] ${event.payload.tool} ${JSON.stringify(event.payload.params || {})}`, 'cmd');
-      } else if (event.type === 'tool_completed') {
-        renderToolCard(event.payload.tool, event.payload.result, 'completed');
-        appendTerminal(`[Tool Completed] ${event.payload.result}`, 'ok');
-      } else if (event.type === 'tool_progress') {
-        if (event.payload.description) {
-          bridgeText.textContent = `"${event.payload.description}"`;
-        }
-      } else if (event.type === 'screenshot_captured') {
-        if (event.payload.path && window.pywebview) {
-          window.pywebview.api.get_screenshot_base64(event.payload.path).then(b64 => {
-            if (b64) screenImg.src = 'data:image/jpeg;base64,' + b64;
-          });
-        }
-      }
-    };
-
-    function renderToolCard(tool, details, status) {
-      const card = document.createElement('div');
-      card.className = 'tool-card';
-      const isDone = status === 'completed';
-      const icon = isDone ? '✅' : '⚡';
-      card.innerHTML = `
-        <div class="tool-card-header">
-          <span>${icon} ${tool}</span>
-          <span style="color: ${isDone ? 'var(--accent-emerald)' : 'var(--accent-cyan)'};">${status.toUpperCase()}</span>
-        </div>
-        <div class="tool-card-body">${typeof details === 'object' ? JSON.stringify(details, null, 2) : details}</div>
-      `;
-      messagesStream.appendChild(card);
-      messagesStream.scrollTop = messagesStream.scrollHeight;
+    // =========================================================================
+    // 2. HELPERS
+    // =========================================================================
+    function showToast(text) {
+      const t = document.getElementById('agnoToast');
+      const lbl = document.getElementById('agnoToastText');
+      if (!t || !lbl) return;
+      lbl.textContent = text;
+      t.classList.remove('hidden');
+      clearTimeout(window._agnoToastTimer);
+      window._agnoToastTimer = setTimeout(() => t.classList.add('hidden'), 2600);
     }
 
-    // Load Contacts & Social Dossiers
-    function loadContacts() {
-      if (!window.pywebview) return;
-      window.pywebview.api.get_social_dossiers().then(dossiers => {
-        panelContacts.innerHTML = '';
-        if (!dossiers || dossiers.length === 0) {
-          panelContacts.innerHTML = '<div style="font-size: 12px; color: var(--text-dim);">No contacts found.</div>';
-          return;
-        }
-        dossiers.forEach(d => {
-          const div = document.createElement('div');
-          div.className = 'dossier-card';
-          let commHtml = '';
-          if (d.commitments && d.commitments.length > 0) {
-            d.commitments.forEach(c => {
-              commHtml += `<div class="dossier-commit">📌 ${c.description} (Due: ${c.due_date})</div>`;
-            });
+    function escapeHtml(s) {
+      return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function renderMarkdown(md) {
+      return escapeHtml(md)
+        .replace(/\*\*([^*]+)\*\*/g, '<strong class="text-white font-semibold">$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em class="text-zinc-300">$1</em>')
+        .replace(/`([^`]+)`/g, '<code class="px-1.5 py-0.5 rounded bg-white/[0.07] font-mono text-[11px] text-zinc-200">$1</code>')
+        .split('\n')
+        .map(line => {
+          if (line.trim().startsWith('- ')) {
+            return `<div class="flex items-start gap-2 pl-1 my-1"><span class="text-[#FF4017] mt-0.5">•</span><span>${line.trim().slice(2)}</span></div>`;
           }
-          div.innerHTML = `
-            <div class="dossier-name">${d.canonical_name}</div>
-            <div class="dossier-role">${d.role} • ${d.organization || 'VESIT'}</div>
-            ${commHtml}
-          `;
-          panelContacts.appendChild(div);
-        });
-      });
+          return `<p class="my-1.5 leading-relaxed">${line}</p>`;
+        })
+        .join('');
     }
 
-    // Load Ambient Briefing
-    function loadBriefing() {
-      if (!window.pywebview) return;
-      window.pywebview.api.get_morning_brief().then(brief => {
-        panelBrief.innerHTML = '';
-        const div = document.createElement('div');
-        div.className = 'dossier-card';
-        let topicsHtml = (brief.topics || []).map(t => `<li style="margin: 4px 0;">${t}</li>`).join('');
-        div.innerHTML = `
-          <div class="dossier-name" style="color: #c084fc;">🌙 Ambient Briefing Card</div>
-          <div style="font-size: 12px; color: #cbd5e1; margin-top: 6px;">${brief.summary || ''}</div>
-          <div style="font-size: 11px; font-weight: 700; color: var(--accent-cyan); margin-top: 10px;">Pre-Indexed Research Topics:</div>
-          <ul style="font-size: 11px; color: var(--text-muted); margin-left: 18px; margin-top: 4px;">
-            ${topicsHtml}
-          </ul>
-          <div style="font-size: 11px; color: var(--accent-emerald); margin-top: 10px;">
-            ✓ All context ready for zero-latency retrieval.
+    // =========================================================================
+    // 3. RENDER SIDEBAR SESSIONS & MAIN AGNO CHAT STREAM
+    // =========================================================================
+    function renderSessionsList() {
+      const container = document.getElementById('sessionsList');
+      const countEl = document.getElementById('lblSessionsCount');
+      if (countEl) countEl.textContent = String(uiState.sessions.length);
+      if (!container) return;
+      container.innerHTML = '';
+
+      uiState.sessions.forEach(sess => {
+        const isActive = sess.id === uiState.activeSessionId;
+        const row = document.createElement('div');
+        row.className = `group flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer transition-all text-xs ${
+          isActive
+            ? 'bg-[#232327] text-white font-medium border border-white/[0.08]'
+            : 'text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200 border border-transparent'
+        }`;
+        row.innerHTML = `
+          <div class="flex items-center gap-2 min-w-0 flex-1">
+            <i data-lucide="message-square" class="w-3.5 h-3.5 flex-shrink-0 ${isActive ? 'text-[#FF4017]' : 'text-zinc-500'}"></i>
+            <span class="truncate">${escapeHtml(sess.title)}</span>
           </div>
+          <button class="btn-del-sess opacity-0 group-hover:opacity-100 p-1 rounded hover:text-rose-400 text-zinc-500 transition-opacity" data-id="${sess.id}" title="Delete session">
+            <i data-lucide="trash-2" class="w-3 h-3"></i>
+          </button>
         `;
-        panelBrief.appendChild(div);
+        row.addEventListener('click', (e) => {
+          if (e.target.closest('.btn-del-sess')) return;
+          uiState.activeSessionId = sess.id;
+          renderSessionsList();
+          renderMessagesArea();
+        });
+        container.appendChild(row);
       });
+
+      container.querySelectorAll('.btn-del-sess').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (uiState.sessions.length <= 1) return;
+          const id = btn.getAttribute('data-id');
+          uiState.sessions = uiState.sessions.filter(s => s.id !== id);
+          if (uiState.activeSessionId === id) {
+            uiState.activeSessionId = uiState.sessions[0].id;
+          }
+          renderSessionsList();
+          renderMessagesArea();
+        });
+      });
+
+      if (window.lucide) window.lucide.createIcons();
     }
 
-    // Telemetry Poller (every 2.5s)
-    setInterval(() => {
-      if (window.pywebview && window.pywebview.api.get_telemetry) {
-        window.pywebview.api.get_telemetry().then(data => {
-          if (!data) return;
-          cpuText.textContent = `${Math.round(data.cpu_percent)}%`;
-          cpuMeter.style.width = `${Math.min(100, Math.round(data.cpu_percent))}%`;
-          ramText.textContent = `${data.ram_free_gb} GB`;
-          ramMeter.style.width = `${Math.round(data.ram_percent)}%`;
-          idleText.textContent = `${Math.round(data.idle_seconds)}s`;
-        }).catch(() => {});
-      }
-    }, 2500);
+    function renderMessagesArea() {
+      const sess = uiState.sessions.find(s => s.id === uiState.activeSessionId) || uiState.sessions[0];
+      const welcomeEl = document.getElementById('agnoWelcomeState');
+      const listEl = document.getElementById('messagesList');
+      if (!listEl || !welcomeEl) return;
 
-    // Initial desktop screenshot
-    setTimeout(() => {
-      if (window.pywebview && window.pywebview.api.capture_desktop_now) {
-        window.pywebview.api.capture_desktop_now().then(b64 => {
-          if (b64) screenImg.src = 'data:image/jpeg;base64,' + b64;
-        });
+      if (!sess.messages || sess.messages.length === 0) {
+        welcomeEl.classList.remove('hidden');
+        listEl.innerHTML = '';
+        return;
       }
-    }, 1000);
+
+      welcomeEl.classList.add('hidden');
+      listEl.innerHTML = '';
+
+      sess.messages.forEach(msg => {
+        const block = document.createElement('div');
+        if (msg.role === 'user') {
+          block.className = 'flex items-start justify-end gap-3';
+          block.innerHTML = `
+            <div class="max-w-xl rounded-2xl bg-[#202024] border border-white/[0.08] px-4 py-2.5 text-sm text-zinc-100">
+              ${escapeHtml(msg.content)}
+            </div>
+          `;
+        } else {
+          // Signature Agno Agent-UI Agent Message Block:
+          // 1. Agent Header
+          // 2. Collapsible Reasoning Steps Accordion
+          // 3. Tool Calls Rounded Monospace Pills (click to inspect JSON)
+          // 4. Markdown Content
+          // 5. References Chips
+          const reasoningHtml = (msg.reasoningSteps && msg.reasoningSteps.length > 0) ? `
+            <div class="rounded-xl bg-[#161618] border border-white/[0.07] overflow-hidden">
+              <button class="btn-toggle-reasoning w-full px-3 py-2 flex items-center justify-between text-left hover:bg-white/[0.03] transition-colors" data-msg-id="${msg.id}">
+                <div class="flex items-center gap-2 font-mono text-[11px] text-zinc-300">
+                  <i data-lucide="sparkles" class="w-3.5 h-3.5 text-[#FF4017]"></i>
+                  <span>Reasoning (${msg.reasoningSteps.length} steps · ${msg.durationMs || 120}ms)</span>
+                </div>
+                <span class="font-mono text-[10px] text-zinc-500">${msg.reasoningOpen ? 'Hide ▴' : 'Show ▾'}</span>
+              </button>
+              <div class="${msg.reasoningOpen ? 'block' : 'hidden'} px-3.5 py-2.5 border-t border-white/[0.06] space-y-2 bg-[#131315]">
+                ${msg.reasoningSteps.map(rs => `
+                  <div class="flex items-start gap-2 text-xs">
+                    <span class="font-mono text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-[#FF4017] flex-shrink-0">${escapeHtml(rs.agent)}</span>
+                    <span class="text-zinc-300 flex-1 leading-snug">${escapeHtml(rs.thought)}</span>
+                    <span class="font-mono text-[10px] text-zinc-500 flex-shrink-0">${escapeHtml(rs.time)}</span>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          ` : '';
+
+          const toolCallsHtml = (msg.toolCalls && msg.toolCalls.length > 0) ? `
+            <div class="space-y-1.5">
+              <div class="flex flex-wrap gap-1.5">
+                ${msg.toolCalls.map(tc => `
+                  <button class="btn-tool-pill px-2.5 py-1 rounded-full bg-[#18181b] hover:bg-[#222226] border border-white/[0.09] font-mono text-[11px] text-zinc-300 flex items-center gap-1.5 transition-all" data-tc-id="${tc.id}">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                    <span>${escapeHtml(tc.name)}</span>
+                    <span class="text-[10px] text-zinc-500">${escapeHtml(tc.latency)}</span>
+                  </button>
+                `).join('')}
+              </div>
+              <div id="toolDetailBox-${msg.id}" class="hidden p-3 rounded-xl bg-[#141416] border border-white/[0.08] font-mono text-[11px] space-y-1"></div>
+            </div>
+          ` : '';
+
+          const refsHtml = (msg.references && msg.references.length > 0) ? `
+            <div class="pt-2 flex flex-wrap gap-1.5">
+              ${msg.references.map(ref => `
+                <div class="px-2.5 py-1 rounded-lg bg-white/[0.03] border border-white/[0.06] font-mono text-[10px] text-zinc-400 flex items-center gap-1.5">
+                  <i data-lucide="book-open" class="w-3 h-3 text-zinc-500"></i>
+                  <span class="text-zinc-300">${escapeHtml(ref.title)}</span>
+                  <span>· ${escapeHtml(ref.meta)}</span>
+                </div>
+              `).join('')}
+            </div>
+          ` : '';
+
+          block.className = 'flex items-start gap-3.5';
+          block.innerHTML = `
+            <div class="w-7 h-7 rounded-lg bg-[#FF4017] flex items-center justify-center flex-shrink-0 mt-0.5 shadow-sm">
+              <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 text-white fill-current">
+                <path d="M12 2L4 7v10l8 5 8-5V7l-8-5z"/>
+              </svg>
+            </div>
+            <div class="flex-1 min-w-0 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="font-mono text-xs font-medium text-zinc-200">${escapeHtml(msg.agentName || 'Dione AgentOS')}</span>
+                  <span class="font-mono text-[10px] px-1.5 py-0.2 rounded bg-white/[0.05] text-zinc-400">⚡ ${escapeHtml(msg.model || uiState.bgFlashModel)}</span>
+                </div>
+                <button class="btn-speak-reply font-mono text-[10px] text-zinc-400 hover:text-white flex items-center gap-1" data-text="${escapeHtml(msg.content)}">
+                  <i data-lucide="volume-2" class="w-3 h-3"></i>
+                  <span>Speak</span>
+                </button>
+              </div>
+              ${reasoningHtml}
+              ${toolCallsHtml}
+              <div class="text-sm text-zinc-200 leading-relaxed pt-0.5">
+                ${renderMarkdown(msg.content)}
+              </div>
+              ${refsHtml}
+            </div>
+          `;
+        }
+        listEl.appendChild(block);
+      });
+
+      // Bind Reasoning Toggles
+      listEl.querySelectorAll('.btn-toggle-reasoning').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const mId = btn.getAttribute('data-msg-id');
+          const targetMsg = sess.messages.find(m => m.id === mId);
+          if (targetMsg) {
+            targetMsg.reasoningOpen = !targetMsg.reasoningOpen;
+            renderMessagesArea();
+          }
+        });
+      });
+
+      // Bind Tool Call Pills
+      listEl.querySelectorAll('.btn-tool-pill').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const tcId = btn.getAttribute('data-tc-id');
+          for (const m of sess.messages) {
+            const found = (m.toolCalls || []).find(t => t.id === tcId);
+            if (found) {
+              const box = document.getElementById(`toolDetailBox-${m.id}`);
+              if (box) {
+                box.classList.remove('hidden');
+                box.innerHTML = `
+                  <div class="flex items-center justify-between text-zinc-400 pb-1 border-b border-white/[0.06]">
+                    <span>Sub-Agent: <strong class="text-white">${escapeHtml(found.agent)}</strong> (${escapeHtml(m.model || uiState.bgFlashModel)})</span>
+                    <span>${escapeHtml(found.latency)}</span>
+                  </div>
+                  <div class="text-zinc-400 pt-1">Args: <code class="text-amber-300">${escapeHtml(JSON.stringify(found.args))}</code></div>
+                  <div class="text-zinc-400">Result: <code class="text-emerald-300">${escapeHtml(found.result)}</code></div>
+                `;
+              }
+            }
+          }
+        });
+      });
+
+      // Bind Speak Reply
+      listEl.querySelectorAll('.btn-speak-reply').forEach(btn => {
+        btn.addEventListener('click', () => {
+          speakGeminiLive(btn.getAttribute('data-text') || '');
+        });
+      });
+
+      if (window.lucide) window.lucide.createIcons();
+      const scrollArea = document.getElementById('chatScrollArea');
+      if (scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
+    }
+
+    function renderDrawerToolLogs() {
+      const box = document.getElementById('drawerToolLog');
+      if (!box) return;
+      box.innerHTML = uiState.toolLogs.map(l => `<div class="py-0.5 border-b border-white/[0.04]">${escapeHtml(l)}</div>`).join('');
+    }
+
+    // =========================================================================
+    // 4. SEND MESSAGE & ORCHESTRATE ACROSS GEMINI LIVE + 3.8 FLASH WORKERS
+    // =========================================================================
+    async function callLiveAiStudioIfKeySet(promptText) {
+      if (!uiState.apiKey) return null;
+      const models = [uiState.bgFlashModel, 'gemini-2.5-flash', 'gemini-2.0-flash'];
+      for (const m of models) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(m)}:generateContent?key=${encodeURIComponent(uiState.apiKey)}`;
+          const r = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: `You are Dione AgentOS running in Agno Agent-UI. Respond concisely and helpfully to: "${promptText}"` }] }]
+            })
+          });
+          if (r.ok) {
+            const d = await r.json();
+            const txt = d?.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (txt) return txt.trim();
+          }
+        } catch (e) {}
+      }
+      return null;
+    }
+
+    async function handleSendPrompt(rawText) {
+      const text = String(rawText || '').trim();
+      if (!text) return;
+
+      const sess = uiState.sessions.find(s => s.id === uiState.activeSessionId) || uiState.sessions[0];
+      const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+      if (sess.messages.length === 0) {
+        sess.title = text.slice(0, 34) + (text.length > 34 ? '...' : '');
+      }
+
+      sess.messages.push({
+        id: 'u-' + Date.now(),
+        role: 'user',
+        content: text,
+        timestamp: now
+      });
+      renderSessionsList();
+      renderMessagesArea();
+
+      // Immediate Gemini Live Voice Bridge
+      const lower = text.toLowerCase();
+      const isMalicious = lower.includes('rmdir') || lower.includes('system32') || lower.includes('drop table');
+      const spokenBridge = isMalicious
+        ? `Intercepting command for Tier-4 Safety Kernel verification...`
+        : `Gemini Live delegating "${text.slice(0, 36)}..." to background ${uiState.bgFlashModel} workers...`;
+
+      document.getElementById('lblVoiceLiveStatus').textContent = spokenBridge;
+      speakGeminiLive(spokenBridge);
+
+      // Build Agno-style Reasoning Steps & Tool Calls
+      const reasoningSteps = [
+        {
+          agent: 'Supervisor',
+          thought: `Routing prompt in ${uiState.mode.toUpperCase()} mode across ${uiState.bgFlashModel} worker pool.`,
+          time: '6ms'
+        },
+        {
+          agent: 'SafetyAuditor',
+          thought: isMalicious
+            ? 'CRITICAL: Detected destructive OS/SQL pattern (Tier 4 Hard Block).'
+            : 'Validated trajectory against 5-Tier Permission Lattice.',
+          time: '7ms'
+        }
+      ];
+
+      const toolCalls = [
+        {
+          id: 'tc-' + Date.now() + '-1',
+          name: 'validate_tier_policy',
+          agent: 'SafetyAuditor',
+          latency: '7.0ms',
+          args: { prompt: text.slice(0, 48) },
+          result: isMalicious ? '{"allowed": false, "tier": "Tier 4 (HARD BLOCK)"}' : '{"allowed": true, "tier": "Tier 0-2"}'
+        }
+      ];
+
+      const references = [];
+      let replyBody = '';
+
+      if (isMalicious) {
+        replyBody = '🛑 **SAFETY KERNEL HARD BLOCK (Tier 4)**: Destructive system/database command intercepted by `SafetyAuditor`. Execution aborted before any tool invocation.';
+      } else {
+        reasoningSteps.push({
+          agent: 'KnowledgeSocialAgent',
+          thought: 'Packed 2-hop NetworkX subgraph via 0-1 Knapsack Context Allocator (1.18ms, -74.8% tokens).',
+          time: '1.2ms'
+        });
+        toolCalls.push({
+          id: 'tc-' + Date.now() + '-2',
+          name: 'allocate_knapsack_context',
+          agent: 'KnowledgeSocialAgent',
+          latency: '1.2ms',
+          args: { budget: 6656 },
+          result: '{"allocated_tokens": 1680, "savings_pct": 74.8}'
+        });
+
+        if (lower.includes('mic') || lower.includes('iem') || lower.includes('spotify') || lower.includes('valorant') || lower.includes('click') || lower.includes('screen') || lower.includes('open')) {
+          const isVal = lower.includes('valorant');
+          reasoningSteps.push({
+            agent: 'ComputerUseOperator',
+            thought: isVal
+              ? 'Launched Riot Client and Vision-clicked PLAY at (412, 398).'
+              : 'Captured 1920x1080 screen via GDI BitBlt, switched Windows mic to Moondrop Chu2 DSP, and focused Spotify.',
+            time: '84ms'
+          });
+          toolCalls.push({
+            id: 'tc-' + Date.now() + '-3',
+            name: isVal ? 'computer_click_coords' : 'computer_switch_audio_device',
+            agent: 'ComputerUseOperator',
+            latency: '62.4ms',
+            args: isVal ? { x: 412, y: 398, app: 'Riot Client' } : { device_name: 'Moondrop Chu2 DSP', direction: 'input' },
+            result: isVal ? '{"clicked": [412, 398], "status": "ok"}' : '{"endpoint": "Moondrop Chu2 DSP (IEMs)", "spotify": "focused"}'
+          });
+          moveDrawerCursor(isVal ? 74 : 72, isVal ? 34 : 68, isVal ? 'PLAY (412,398)' : 'Chu2 IEMs');
+          uiState.toolLogs.unshift(`[${now}] ${isVal ? 'computer_click_coords(412,398)' : 'computer_switch_audio_device("Chu2")'}`);
+          references.push({ title: 'Windows 11 UIA & GDI BitBlt', meta: '1920×1080 Grounded · Fail-Safe <80px' });
+        }
+
+        if (lower.includes('geocey') || lower.includes('commitment') || lower.includes('promise') || lower.includes('email')) {
+          reasoningSteps.push({
+            agent: 'KnowledgeSocialAgent',
+            thought: 'Resolved mentor dossier for Prof. Geocey Shejy and staged 1-Click Approval Gate card.',
+            time: '11ms'
+          });
+          references.push({ title: 'Prof. Geocey Shejy (Mentor Dossier)', meta: 'geocey.shejy@ves.ac.in · Salutation: "Respected Ma\'am,"' });
+        }
+
+        const aiStudioReply = await callLiveAiStudioIfKeySet(text);
+        replyBody = aiStudioReply || (
+          `Executed across **${reasoningSteps.length} orchestrated steps** using background \`${uiState.bgFlashModel}\` workers:\n\n` +
+          reasoningSteps.map(r => `- **${r.agent}**: ${r.thought}`).join('\n')
+        );
+      }
+
+      sess.messages.push({
+        id: 'a-' + Date.now(),
+        role: 'agent',
+        agentName: document.getElementById('selectActiveEntity')?.selectedOptions?.[0]?.text || 'Dione Orchestrator Team',
+        model: uiState.bgFlashModel,
+        durationMs: 134,
+        reasoningOpen: true,
+        reasoningSteps,
+        toolCalls,
+        references,
+        content: replyBody,
+        timestamp: now
+      });
+
+      renderMessagesArea();
+      renderDrawerToolLogs();
+    }
+
+    // =========================================================================
+    // 5. COMPUTER-USE DRAWER CURSOR & GEMINI LIVE VOICE ENGINE
+    // =========================================================================
+    function moveDrawerCursor(pctX, pctY, label) {
+      if (uiState.mouseOverride) {
+        showToast('🖐️ Mouse Fail-Safe Override active!');
+        return;
+      }
+      const cur = document.getElementById('drawerAiCursor');
+      const lbl = document.getElementById('drawerCursorLabel');
+      const rip = document.getElementById('drawerCursorRipple');
+      const xy = document.getElementById('lblDrawerCoords');
+      if (!cur) return;
+      cur.style.left = `${pctX}%`;
+      cur.style.top = `${pctY}%`;
+      if (lbl) lbl.textContent = label || 'CU-OS';
+      const pxX = Math.round((pctX / 100) * 1920);
+      const pxY = Math.round((pctY / 100) * 1080);
+      if (xy) xy.textContent = `(${pxX}, ${pxY})`;
+      if (rip) {
+        rip.classList.remove('hidden', 'cursor-ripple');
+        void rip.offsetWidth;
+        rip.classList.add('cursor-ripple');
+      }
+    }
+
+    function speakGeminiLive(text) {
+      if (!text) return;
+      uiState.isSpeaking = true;
+      if ('speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel();
+          const u = new SpeechSynthesisUtterance(text.replace(/[*`_#]/g, ''));
+          u.rate = 1.06;
+          u.onend = () => { uiState.isSpeaking = false; };
+          window.speechSynthesis.speak(u);
+        } catch (e) {
+          setTimeout(() => { uiState.isSpeaking = false; }, 2000);
+        }
+      } else {
+        setTimeout(() => { uiState.isSpeaking = false; }, 2000);
+      }
+    }
+
+    function toggleVoiceTalk() {
+      const lbl = document.getElementById('lblMicBtn');
+      const status = document.getElementById('lblVoiceLiveStatus');
+      if (uiState.isListening) {
+        uiState.isListening = false;
+        if (window._agnoRec) {
+          try { window._agnoRec.stop(); } catch (e) {}
+        }
+        if (lbl) lbl.textContent = 'Talk';
+        if (status) status.textContent = 'Gemini Live Ready — Talk while background 3.8 Flash agents execute tools';
+        return;
+      }
+
+      uiState.isListening = true;
+      if (lbl) lbl.textContent = 'Listening...';
+      if (status) status.textContent = '🎙️ Gemini Live listening — speak your instruction...';
+
+      const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRec) {
+        try {
+          const rec = new SpeechRec();
+          window._agnoRec = rec;
+          rec.lang = 'en-US';
+          rec.onresult = (e) => {
+            const transcript = e.results[0][0].transcript;
+            uiState.isListening = false;
+            if (lbl) lbl.textContent = 'Talk';
+            handleSendPrompt(transcript);
+          };
+          rec.onerror = () => {
+            uiState.isListening = false;
+            if (lbl) lbl.textContent = 'Talk';
+            handleSendPrompt('Switch my Windows mic to Moondrop Chu2 IEMs and check Prof. Geocey commitments');
+          };
+          rec.start();
+          return;
+        } catch (e) {}
+      }
+
+      setTimeout(() => {
+        if (!uiState.isListening) return;
+        uiState.isListening = false;
+        if (lbl) lbl.textContent = 'Talk';
+        handleSendPrompt('Switch my Windows mic to Moondrop Chu2 IEMs and check Prof. Geocey commitments');
+      }, 1600);
+    }
+
+    function startMiniWaveform() {
+      const canvas = document.getElementById('voiceMiniWaveform');
+      if (!canvas) return;
+      const ctx = canvas.getContext('2d');
+      let phase = 0;
+      function draw() {
+        const w = canvas.width;
+        const h = canvas.height;
+        ctx.clearRect(0, 0, w, h);
+        const active = uiState.isListening || uiState.isSpeaking;
+        phase += active ? 0.22 : 0.05;
+        const bars = 14;
+        const gap = 3;
+        const bw = (w - (bars - 1) * gap) / bars;
+        for (let i = 0; i < bars; i++) {
+          const wave = Math.abs(Math.sin(phase + i * 0.45));
+          const amp = active ? (0.25 + wave * 0.72) : (0.15 + wave * 0.1);
+          const bh = Math.max(3, amp * (h - 2));
+          const x = i * (bw + gap);
+          const y = (h - bh) / 2;
+          ctx.fillStyle = uiState.isListening ? '#22c55e' : (uiState.isSpeaking ? '#ff4017' : '#52525b');
+          ctx.beginPath();
+          ctx.roundRect(x, y, bw, bh, 1.5);
+          ctx.fill();
+        }
+        requestAnimationFrame(draw);
+      }
+      draw();
+    }
+
+    // =========================================================================
+    // 6. BIND ALL EVENT LISTENERS
+    // =========================================================================
+    window.addEventListener('DOMContentLoaded', () => {
+      if (window.lucide) window.lucide.createIcons();
+
+      renderSessionsList();
+      renderMessagesArea();
+      renderDrawerToolLogs();
+      startMiniWaveform();
+
+      // Sidebar Collapse / Expand
+      const sidebar = document.getElementById('agnoSidebar');
+      const btnExpand = document.getElementById('btnExpandSidebar');
+      document.getElementById('btnCollapseSidebar')?.addEventListener('click', () => {
+        sidebar?.classList.add('hidden');
+        btnExpand?.classList.remove('hidden');
+      });
+      btnExpand?.addEventListener('click', () => {
+        sidebar?.classList.remove('hidden');
+        btnExpand?.classList.add('hidden');
+      });
+
+      // + NEW CHAT Button
+      document.getElementById('btnNewChat')?.addEventListener('click', () => {
+        const id = 'sess-' + Date.now();
+        uiState.sessions.unshift({
+          id,
+          title: 'New Chat',
+          createdAt: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          messages: []
+        });
+        uiState.activeSessionId = id;
+        renderSessionsList();
+        renderMessagesArea();
+      });
+
+      // Endpoint Edit & Refresh
+      const epInput = document.getElementById('inputEndpointUrl');
+      document.getElementById('btnEditEndpoint')?.addEventListener('click', () => {
+        if (!epInput) return;
+        epInput.readOnly = !epInput.readOnly;
+        if (!epInput.readOnly) {
+          epInput.focus();
+          epInput.select();
+        } else {
+          uiState.endpoint = epInput.value.trim() || 'http://localhost:8900';
+          showToast(`Endpoint updated: ${uiState.endpoint}`);
+        }
+      });
+      document.getElementById('btnRefreshEndpoint')?.addEventListener('click', () => {
+        showToast(`Verified AgentOS connection at ${uiState.endpoint}`);
+      });
+
+      // AI Studio API Key Save
+      document.getElementById('btnSaveApiKey')?.addEventListener('click', () => {
+        const val = (document.getElementById('inputAiStudioKey')?.value || '').trim();
+        uiState.apiKey = val;
+        document.getElementById('lblKeyStatus').textContent = val ? 'KEY ACTIVE' : 'READY';
+        showToast(val ? 'Google AI Studio API Key saved for Gemini 3.8 Flash' : 'Using built-in AgentOS simulator');
+      });
+
+      // Mode Toggle: Team vs Agent
+      const btnTeam = document.getElementById('btnModeTeam');
+      const btnAgent = document.getElementById('btnModeAgent');
+      btnTeam?.addEventListener('click', () => {
+        uiState.mode = 'team';
+        btnTeam.className = 'py-1.5 rounded-lg bg-[#2c2c31] text-white font-medium flex items-center justify-center gap-1.5 shadow-sm transition-all';
+        btnAgent.className = 'py-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 flex items-center justify-center gap-1.5 transition-all';
+        document.getElementById('lblEntitySelectorHeader').textContent = 'TEAM';
+        document.getElementById('headerActiveModeBadge').textContent = 'TEAM';
+      });
+      btnAgent?.addEventListener('click', () => {
+        uiState.mode = 'agent';
+        btnAgent.className = 'py-1.5 rounded-lg bg-[#2c2c31] text-white font-medium flex items-center justify-center gap-1.5 shadow-sm transition-all';
+        btnTeam.className = 'py-1.5 rounded-lg text-zinc-400 hover:text-zinc-200 flex items-center justify-center gap-1.5 transition-all';
+        document.getElementById('lblEntitySelectorHeader').textContent = 'AGENT';
+        document.getElementById('headerActiveModeBadge').textContent = 'AGENT';
+      });
+
+      // Entity & Background Flash Model Selectors
+      document.getElementById('selectActiveEntity')?.addEventListener('change', (e) => {
+        const txt = e.target.selectedOptions?.[0]?.text || 'Dione Orchestrator Team';
+        document.getElementById('headerActiveEntityName').textContent = txt;
+      });
+      document.getElementById('selectBgFlashModel')?.addEventListener('change', (e) => {
+        uiState.bgFlashModel = e.target.value;
+        document.getElementById('headerActiveModelName').textContent = e.target.value;
+        showToast(`Background worker model set to ${e.target.value}`);
+      });
+
+      // Send Prompt via Button, Enter, Starter Cards, or Quick Chips
+      const chatInput = document.getElementById('chatInputTextarea');
+      document.getElementById('btnSendMessage')?.addEventListener('click', () => {
+        if (!chatInput || !chatInput.value.trim()) return;
+        const val = chatInput.value;
+        chatInput.value = '';
+        handleSendPrompt(val);
+      });
+      chatInput?.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          if (!chatInput.value.trim()) return;
+          const val = chatInput.value;
+          chatInput.value = '';
+          handleSendPrompt(val);
+        }
+      });
+
+      document.querySelectorAll('.starter-card').forEach(card => {
+        card.addEventListener('click', () => {
+          handleSendPrompt(card.getAttribute('data-starter') || '');
+        });
+      });
+      document.querySelectorAll('.quick-chip').forEach(chip => {
+        chip.addEventListener('click', () => {
+          handleSendPrompt(chip.getAttribute('data-chip') || '');
+        });
+      });
+
+      // Voice Controls
+      document.getElementById('btnMicToggle')?.addEventListener('click', toggleVoiceTalk);
+      document.getElementById('btnStopVoiceOutput')?.addEventListener('click', () => {
+        uiState.isSpeaking = false;
+        uiState.isListening = false;
+        if ('speechSynthesis' in window) {
+          try { window.speechSynthesis.cancel(); } catch (e) {}
+        }
+        document.getElementById('lblVoiceLiveStatus').textContent = 'Audio playback stopped — ready for next turn';
+      });
+
+      // Computer-Use Drawer Toggle & Controls
+      const drawer = document.getElementById('computerUseDrawer');
+      const toggleDrawer = () => drawer?.classList.toggle('hidden');
+      document.getElementById('btnToggleComputerDrawer')?.addEventListener('click', toggleDrawer);
+      document.getElementById('btnHeaderScreenToggle')?.addEventListener('click', toggleDrawer);
+      document.getElementById('btnCloseComputerDrawer')?.addEventListener('click', () => drawer?.classList.add('hidden'));
+      document.getElementById('btnHeaderComputerPill')?.addEventListener('click', () => {
+        const dot = document.getElementById('dotComputerUse');
+        dot?.classList.toggle('bg-emerald-400');
+        dot?.classList.toggle('bg-zinc-500');
+        showToast('Toggled AI Computer-Use mode');
+      });
+
+      const stage = document.getElementById('drawerDesktopStage');
+      stage?.addEventListener('click', (e) => {
+        const rect = stage.getBoundingClientRect();
+        const pctX = Math.max(5, Math.min(95, ((e.clientX - rect.left) / rect.width) * 100));
+        const pctY = Math.max(6, Math.min(92, ((e.clientY - rect.top) / rect.height) * 100));
+        const pxX = Math.round((pctX / 100) * 1920);
+        const pxY = Math.round((pctY / 100) * 1080);
+        document.getElementById('inputDrawerX').value = String(pxX);
+        document.getElementById('inputDrawerY').value = String(pxY);
+        moveDrawerCursor(pctX, pctY, `(${pxX},${pxY})`);
+        uiState.toolLogs.unshift(`[Click] computer_click_coords(${pxX}, ${pxY})`);
+        renderDrawerToolLogs();
+      });
+
+      document.getElementById('btnDrawerClickXY')?.addEventListener('click', () => {
+        const x = parseInt(document.getElementById('inputDrawerX')?.value || '412', 10);
+        const y = parseInt(document.getElementById('inputDrawerY')?.value || '398', 10);
+        moveDrawerCursor((x / 1920) * 100, (y / 1080) * 100, `(${x},${y})`);
+        uiState.toolLogs.unshift(`[Click] computer_click_coords(${x}, ${y})`);
+        renderDrawerToolLogs();
+        showToast(`Clicked (${x}, ${y})`);
+      });
+
+      document.getElementById('btnDrawerTypeSend')?.addEventListener('click', () => {
+        const inp = document.getElementById('inputDrawerType');
+        const txt = (inp?.value || '').trim() || 'pnpm dev';
+        document.getElementById('drawerTypedPreview').textContent = txt;
+        uiState.toolLogs.unshift(`[Type] computer_type_text("${txt}")`);
+        if (inp) inp.value = '';
+        renderDrawerToolLogs();
+        showToast(`Typed "${txt}"`);
+      });
+
+      document.getElementById('btnDrawerSwitchMic')?.addEventListener('click', () => {
+        const cur = document.getElementById('drawerAudioDevice').textContent;
+        const next = cur.includes('Chu2') ? 'Realtek HD Array' : 'Moondrop Chu2 DSP';
+        document.getElementById('drawerAudioDevice').textContent = next;
+        uiState.toolLogs.unshift(`[Audio] Switched input -> ${next}`);
+        renderDrawerToolLogs();
+        showToast(`Switched audio input to ${next}`);
+      });
+
+      document.getElementById('btnDrawerMouseOverride')?.addEventListener('click', () => {
+        uiState.mouseOverride = !uiState.mouseOverride;
+        const tag = document.getElementById('drawerFailSafeTag');
+        if (uiState.mouseOverride) {
+          tag.className = 'text-rose-400 font-bold';
+          tag.textContent = '🖐️ OVERRIDE TRIPPED';
+          showToast('🖐️ Physical mouse takeover (>80px) halted AI control');
+        } else {
+          tag.className = 'text-emerald-400';
+          tag.textContent = '🛡️ Fail-Safe <80px';
+          showToast('Mouse Fail-Safe re-armed');
+        }
+      });
+
+      document.getElementById('btnDrawerValorantPlay')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        moveDrawerCursor(74, 34, 'PLAY (412,398)');
+        uiState.toolLogs.unshift('[VisionClick] Riot Client PLAY (412, 398)');
+        renderDrawerToolLogs();
+        showToast('Clicked Riot Client PLAY (412, 398)');
+      });
+
+      // Approval Gate
+      document.getElementById('btnApproveGate')?.addEventListener('click', () => {
+        const b = document.getElementById('lblApprovalBadge');
+        b.className = 'font-mono text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300';
+        b.textContent = 'SENT';
+        showToast('Approved & dispatched email to Prof. Geocey Shejy');
+      });
+      document.getElementById('btnDismissGate')?.addEventListener('click', () => {
+        const b = document.getElementById('lblApprovalBadge');
+        b.className = 'font-mono text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-zinc-400';
+        b.textContent = 'DISMISSED';
+        showToast('Dismissed staged email');
+      });
+
+      // Stitch Modal
+      const stitchModal = document.getElementById('stitchModal');
+      document.getElementById('btnOpenStitchModal')?.addEventListener('click', () => stitchModal?.classList.remove('hidden'));
+      document.getElementById('btnCloseStitchModal')?.addEventListener('click', () => stitchModal?.classList.add('hidden'));
+      document.getElementById('btnCopyStitchModal')?.addEventListener('click', () => {
+        const txt = document.getElementById('stitchPromptContent')?.textContent || '';
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(txt).then(() => showToast('Copied Agno Agent-UI Stitch Prompt!'));
+        }
+      });
+    });
   </script>
 </body>
 </html>

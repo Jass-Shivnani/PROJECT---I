@@ -5,9 +5,23 @@ The main FastAPI app that exposes Dione's capabilities
 over HTTP and WebSocket for the mobile companion.
 """
 
+import sys
+import socket
+import asyncio
+
+if sys.platform == 'win32':
+    _orig_getpeername = socket.socket.getpeername
+    def _safe_getpeername(self):
+        try:
+            return _orig_getpeername(self)
+        except OSError:
+            return ('127.0.0.1', 0)
+    socket.socket.getpeername = _safe_getpeername
+
 from contextlib import asynccontextmanager
 import os
-from fastapi import FastAPI
+os.environ["ANONYMOUS_TELEMETRY"] = "False"
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from pathlib import Path
@@ -113,8 +127,7 @@ async def lifespan(app: FastAPI):
     heartbeat.set_profile_manager(profile_manager)
     heartbeat.set_personality_engine(personality)
 
-    # 11. Dione Engine
-    logger.info("Assembling Dione Engine (Native ReAct Loop + Safety Kernel)...")
+    # 11. Microsoft Agent Framework (MAF 1.21.0) & Dione Engine Assembly
     from server.core.engine import DioneEngine
     engine = DioneEngine()
     engine.set_llm(llm)
@@ -127,21 +140,36 @@ async def lifespan(app: FastAPI):
     engine.set_heartbeat(heartbeat)
     engine.set_ui_builder(ui_builder)
 
-    # 11b. Microsoft Agent Framework (MAF 1.21.0) Enterprise Engine
+    # 11b. Dione Multi-Agent Orchestrator (Zero-Mock Production Core)
+    from server.core.orchestrator import get_multi_agent_orchestrator
+    orchestrator = get_multi_agent_orchestrator()
+    orchestrator.set_llm(llm)
+    orchestrator.set_knowledge_graph(knowledge)
+    orchestrator.set_plugins(plugins)
+    orchestrator.set_memory_manager(memory)
+    orchestrator.engine = engine
+
     maf_engine = None
     try:
         from server.core.maf_engine import MAFEngine
         maf_engine = MAFEngine(knowledge_graph=knowledge)
-        logger.info("✨ Microsoft Agent Framework (MAF 1.21.0) Enterprise Engine active")
-        if os.getenv("DIONE_USE_MAF", "").lower() in ("1", "true", "yes"):
-            engine = maf_engine
-            logger.info("✨ Default agent execution routed to Microsoft Agent Framework (MAFEngine)")
+        logger.info("[MAFEngine] Enterprise hierarchical engine loaded")
     except Exception as maf_err:
         logger.warning(f"MAF Engine optional initialization note: {maf_err}")
 
-    # 12. Integrations (Gmail, Drive, etc.)
+    # 11c. Star Feature: Autonomous Inactive-State Dream & Scout Engine
+    from server.proactive.dream_engine import DreamSynthesisEngine
+    dream_engine = DreamSynthesisEngine(knowledge_graph=knowledge, memory_manager=memory)
+    await dream_engine.start_autonomous_monitor()
+    logger.info("[DreamEngine] Autonomous Inactive Dream & Scout Engine online.")
+
+    # 12. Integrations (Unified Google OAuth2, Gmail, Drive, Calendar, Photos, WhatsApp, Telegram, Slack, Instagram)
     logger.info("Initializing integrations...")
     integrations = create_default_registry(data_dir="data")
+    await integrations.initialize_saved_connections()
+    engine.set_integrations(integrations)
+    if hasattr(orchestrator, "set_integrations"):
+        orchestrator.set_integrations(integrations)
 
     # 13. Telegram Bot Background Service (if token present)
     telegram_token = os.getenv("DIONE_TELEGRAM_BOT_TOKEN", "").strip()
@@ -157,7 +185,7 @@ async def lifespan(app: FastAPI):
             )
             started = await telegram_service.start()
             if started:
-                logger.info("✨ Telegram Bot Service active: @DioneAiBot")
+                logger.info("[Telegram] Bot Service active: @DioneAiBot")
             app.state.telegram_service = telegram_service
         except Exception as e:
             logger.error(f"Failed to start Telegram service: {e}")
@@ -168,6 +196,8 @@ async def lifespan(app: FastAPI):
     # Store on app state for route access
     app.state.engine = engine
     app.state.maf_engine = maf_engine
+    app.state.orchestrator = orchestrator
+    app.state.dream_engine = dream_engine
     app.state.llm = llm
     app.state.memory = memory
     app.state.knowledge = knowledge
@@ -192,6 +222,7 @@ async def lifespan(app: FastAPI):
     logger.info("Dione AI shutting down...")
     if telegram_service:
         await telegram_service.stop()
+    await dream_engine.stop_autonomous_monitor()
     await heartbeat.stop()
     personality.save()
     profile_manager.save()
@@ -223,7 +254,8 @@ def create_app() -> FastAPI:
     )
 
     # Register routes
-    from server.api.routes import chat, knowledge, plugins, status, audio, integrations, channels, desktop
+    from server.api.routes import chat, knowledge, plugins, status, audio, integrations, channels, desktop, openai_compat
+    app.include_router(openai_compat.router, prefix="/v1", tags=["OpenAI-Compatible"])
     app.include_router(chat.router, prefix="/api", tags=["Chat"])
     app.include_router(desktop.router, prefix="/api/desktop", tags=["Desktop"])
     app.include_router(knowledge.router, prefix="/api/knowledge", tags=["Knowledge"])
@@ -232,6 +264,10 @@ def create_app() -> FastAPI:
     app.include_router(channels.router, prefix="/api/channels", tags=["Channels"])
     app.include_router(status.router, prefix="/api/status", tags=["Status"])
     app.include_router(audio.router, prefix="/api/audio", tags=["Audio"])
+
+    @app.get("/api/health", tags=["Status"])
+    async def global_health(request: Request):
+        return await status.health_check(request)
 
     try:
         from server.api.routes import ag_ui
@@ -259,13 +295,23 @@ def create_app() -> FastAPI:
                 return FileResponse(target)
             return FileResponse(client_dist / "index.html")
     else:
-        @app.get("/", tags=["Root"])
+        from fastapi.responses import FileResponse
+        studio_html = Path(__file__).resolve().parent.parent / "ui" / "studio" / "index.html"
+
+        @app.get("/", include_in_schema=False)
         async def root():
+            if studio_html.exists():
+                return FileResponse(studio_html)
             return {
-                "name": "Dione AI",
-                "version": "0.2.0",
+                "name": "Dione 2026 Agentic OS",
+                "version": "2026.2.0",
                 "status": "alive",
-                "description": "Local Large Action Model Orchestration Engine",
+                "description": "Hierarchical Multi-Agent LAM with Computer Use & Neural Voice",
             }
 
     return app
+
+
+# Module-level ASGI app instance for direct uvicorn server.api.app:app execution
+app = create_app()
+

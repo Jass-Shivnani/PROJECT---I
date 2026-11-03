@@ -1,8 +1,8 @@
 """
 Dione AI — Integration Routes
 
-Manage external service integrations (Gmail, Drive, etc.)
-with runtime permission grants and connection lifecycle.
+Manage external service integrations (Unified Google OAuth2, Gmail, Drive, Calendar, Photos, WhatsApp, Telegram, Slack, Instagram)
+with runtime permission grants, tool execution, and connection lifecycle.
 """
 
 from __future__ import annotations
@@ -21,13 +21,57 @@ class IntegrationPermissionRequest(BaseModel):
     permissions: list[str] = []
 
 
+class IntegrationToolRequest(BaseModel):
+    tool_name: str
+    params: dict = {}
+
+
 @router.get("/")
+@router.get("")
 async def list_integrations(request: Request):
     integrations = getattr(request.app.state, "integrations", None)
     if not integrations:
         return {"total": 0, "connected": 0, "integrations": []}
 
     return integrations.to_dict()
+
+
+@router.post("/google/connect")
+async def connect_unified_google(body: IntegrationConnectRequest, request: Request):
+    """One-click Unified Google OAuth2 login across Gmail, Calendar, Drive, and Photos."""
+    integrations = getattr(request.app.state, "integrations", None)
+    if not integrations:
+        return {"success": False, "error": "Integrations are not initialized"}
+
+    return await integrations.connect_google_unified(body.params or {})
+
+
+@router.post("/verify-all")
+async def verify_all_integrations(request: Request):
+    """Live-probe all registered integrations and return updated statuses."""
+    integrations = getattr(request.app.state, "integrations", None)
+    if not integrations:
+        return {"success": False, "error": "Integrations are not initialized"}
+
+    statuses = await integrations.verify_all_statuses()
+    return {
+        "success": True,
+        "statuses": {k: v.value for k, v in statuses.items()},
+        "registry": integrations.to_dict(),
+    }
+
+
+@router.post("/execute-tool")
+async def execute_integration_tool(body: IntegrationToolRequest, request: Request):
+    """Execute an integration tool directly via REST API."""
+    integrations = getattr(request.app.state, "integrations", None)
+    if not integrations:
+        return {"success": False, "error": "Integrations are not initialized"}
+    try:
+        res = await integrations.execute_tool(body.tool_name, body.params or {})
+        return {"success": True, "result": res}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @router.post("/{integration_id}/grant")

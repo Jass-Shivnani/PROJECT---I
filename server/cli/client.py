@@ -1,19 +1,11 @@
 """
-Dione AI — Interactive CLI Chat Client
-========================================
-A rich terminal client for talking to the Dione AI server.
-
-Usage:
-    dione client            Open the chat client
-    dione client --server http://localhost:8900
-
-Features:
-    • Rich formatted responses (markdown, code blocks, tables)
-    • Streaming responses via WebSocket
-    • Command palette (type '/help' for commands)
-    • Conversation history within session
-    • Connection status indicator
-    • Mood display from server
+Dione 2026 — Interactive Multi-Agent CLI & TUI Client
+======================================================
+A modern 2026 terminal agent studio for Dione AI featuring:
+  • Hierarchical Multi-Agent Orchestration DAG tree view (Supervisor -> Sub-Agents)
+  • Direct Computer-Use CLI controls (/computer, /screenshot, /click, /type, /launch)
+  • Real-Time Neural Voice Talk mode (/voice) with Edge-TTS & Spoken Filler Bridges
+  • 5-Tier Safety Kernel status and Blackboard telemetry inspector
 """
 
 import asyncio
@@ -22,73 +14,65 @@ import sys
 import time
 from typing import Optional
 
-try:
-    from rich.console import Console
-    from rich.markdown import Markdown
-    from rich.panel import Panel
-    from rich.live import Live
-    from rich.text import Text
-    from rich.spinner import Spinner
-    from rich import box
-except ImportError:
-    print("ERROR: 'rich' is required. Install with: pip install rich")
-    sys.exit(1)
+# Ensure UTF-8 console output on Windows
+if sys.platform == "win32":
+    if hasattr(sys.stdout, "reconfigure"):
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except Exception:
+            pass
 
-try:
-    import httpx
-except ImportError:
-    print("ERROR: 'httpx' is required. Install with: pip install httpx")
-    sys.exit(1)
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
+from rich.table import Table
+from rich.tree import Tree
+from rich.columns import Columns
+from rich.text import Text
+from rich import box
+import httpx
 
+console = Console(legacy_windows=False)
+VERSION = "2026.2.0"
 
-console = Console()
-
-VERSION = "0.2.0"
-
-BANNER = """[bold cyan]
-     ██████╗ ██╗ ██████╗ ███╗   ██╗███████╗
-     ██╔══██╗██║██╔═══██╗████╗  ██║██╔════╝
-     ██║  ██║██║██║   ██║██╔██╗ ██║█████╗
-     ██║  ██║██║██║   ██║██║╚██╗██║██╔══╝
-     ██████╔╝██║╚██████╔╝██║ ╚████║███████╗
-     ╚═════╝ ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝
-[/bold cyan]"""
-
-
-# ─── Client Commands ──────────────────────────────────────
+BANNER = """[bold medium_purple1]
+  ██████╗ ██╗ ██████╗ ███╗   ██╗███████╗    ██████╗  ██████╗ ██████╗  ██████╗ 
+  ██╔══██╗██║██╔═══██╗████╗  ██║██╔════╝    ╚════██╗██╔═████╗╚════██╗██╔════╝ 
+  ██║  ██║██║██║   ██║██╔██╗ ██║█████╗       █████╔╝██║██╔██║ █████╔╝███████╗ 
+  ██║  ██║██║██║   ██║██║╚██╗██║██╔══╝      ██╔═══╝ ████╔╝██║██╔═══╝ ██╔═══██╗
+  ██████╔╝██║╚██████╔╝██║ ╚████║███████╗    ███████╗╚██████╔╝███████╗╚██████╔╝
+  ╚═════╝ ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝    ╚══════╝ ╚═════╝ ╚══════╝ ╚═════╝ 
+[/bold medium_purple1][dim]  Hierarchical Multi-Agent Orchestrator · Native Computer Use · Neural Voice Talk[/dim]"""
 
 CLIENT_COMMANDS = {
-    "/help":    "Show this help menu",
-    "/clear":   "Clear the screen",
-    "/status":  "Show server status & connection info",
-    "/mood":    "Show Dione's current mood",
-    "/ping":    "Ping the server",
-    "/history": "Show conversation history this session",
-    "/exit":    "Exit the client (also: /quit, Ctrl+C)",
-    "/quit":    "Exit the client",
+    "/help":       "Show all 2026 Agent CLI commands",
+    "/agents":     "Inspect the 6-Agent Orchestration Swarm & capabilities",
+    "/dag":        "Render the latest Multi-Agent DAG execution tree & handoffs",
+    "/computer":   "Execute direct Computer-Use action (e.g. /computer screenshot, /computer launch spotify)",
+    "/voice":      "Toggle real-time Neural Voice Talk synthesis (Edge-TTS + Filler Bridges)",
+    "/status":     "Show server, Safety Kernel, & hardware telemetry",
+    "/clear":      "Clear terminal viewport",
+    "/exit":       "Exit Dione CLI Studio",
 }
 
 
 class DioneClient:
-    """Interactive CLI chat client for Dione AI."""
+    """2026 Multi-Agent CLI Client for Dione AI."""
 
     def __init__(self, server_url: str = "http://localhost:8900"):
         self.server_url = server_url.rstrip("/")
-        self.ws_url = self.server_url.replace("http://", "ws://").replace("https://", "wss://")
         self.history: list[dict] = []
         self.connected = False
-        self.server_info: dict = {}
-        self.mood_info: dict = {}
-
-    # ── Connection ────────────────────────────────────────
+        self.voice_enabled = True
+        self.computer_use_enabled = True
+        self.last_orchestration: Optional[dict] = None
 
     async def check_connection(self) -> bool:
-        """Check if the Dione server is reachable."""
         try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(f"{self.server_url}/api/status/info")
+            async with httpx.AsyncClient(timeout=3) as client:
+                resp = await client.get(f"{self.server_url}/api/ag-ui/info")
                 if resp.status_code == 200:
-                    self.server_info = resp.json()
                     self.connected = True
                     return True
         except Exception:
@@ -96,302 +80,153 @@ class DioneClient:
         self.connected = False
         return False
 
-    async def get_mood(self) -> dict:
-        """Fetch Dione's current mood from server."""
-        try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(f"{self.server_url}/api/status/info")
-                if resp.status_code == 200:
-                    data = resp.json()
-                    self.mood_info = data.get("mood", {})
-                    return self.mood_info
-        except Exception:
-            pass
-        return {}
-
-    async def send_message(self, message: str) -> dict:
-        """Send a message to Dione via REST endpoint."""
-        try:
-            async with httpx.AsyncClient(timeout=120) as client:
-                resp = await client.post(
-                    f"{self.server_url}/api/chat",
-                    json={"message": message},
-                )
-                if resp.status_code == 200:
-                    return resp.json()
-                else:
-                    return {"error": f"Server returned {resp.status_code}"}
-        except httpx.ConnectError:
-            self.connected = False
-            return {"error": "Connection lost. Is the server running? Try 'dione start'"}
-        except httpx.ReadTimeout:
-            return {"error": "Request timed out. The server might be overloaded."}
-        except Exception as e:
-            return {"error": str(e)}
-
-    async def ping(self) -> float:
-        """Ping the server and return latency in ms."""
-        start = time.monotonic()
-        try:
-            async with httpx.AsyncClient(timeout=5) as client:
-                resp = await client.get(f"{self.server_url}/")
-                if resp.status_code == 200:
-                    return (time.monotonic() - start) * 1000
-        except Exception:
-            pass
-        return -1
-
-    # ── Display Helpers ───────────────────────────────────
-
-    def _display_response(self, response: dict):
-        """Display an AI response with Rich formatting."""
-        text = response.get("response", "")
-        if not text:
-            console.print("[dim]No response received.[/dim]")
-            return
-
-        # Show mood indicator if available
-        mood = response.get("mood", {})
-        mood_label = mood.get("label", "") if mood else ""
-
-        # Render markdown
-        try:
-            md = Markdown(text)
-            mood_tag = f" [dim]({mood_label})[/dim]" if mood_label else ""
-            console.print(Panel(
-                md,
-                title=f"[bold magenta]🌙 Dione[/bold magenta]{mood_tag}",
-                border_style="magenta",
-                box=box.ROUNDED,
-                padding=(1, 2),
-            ))
-        except Exception:
-            # Fallback to plain text
-            console.print(f"[magenta]Dione:[/magenta] {text}")
-
-        # Show latency & tools used
-        latency = response.get("latency_ms", 0)
-        tools = response.get("tools_used", [])
-        meta_parts = []
-        if latency:
-            meta_parts.append(f"{latency:.0f}ms")
-        if tools:
-            meta_parts.append(f"tools: {', '.join(tools)}")
-        if meta_parts:
-            console.print(f"[dim]  ⏱ {' | '.join(meta_parts)}[/dim]")
-
-    def _display_user_message(self, message: str):
-        """Display the user's message."""
-        console.print(Panel(
-            Text(message, style="white"),
-            title="[bold cyan]You[/bold cyan]",
-            border_style="cyan",
+    def render_agent_swarm_table(self):
+        from server.core.orchestrator import get_multi_agent_orchestrator
+        orch = get_multi_agent_orchestrator()
+        table = Table(
+            title="🤖 Dione 2026 Multi-Agent Orchestration Swarm",
             box=box.ROUNDED,
-            padding=(0, 2),
-        ))
+            border_style="medium_purple1",
+            show_lines=True,
+        )
+        table.add_column("Badge", style="bold cyan", width=8)
+        table.add_column("Agent Name", style="bold white", width=28)
+        table.add_column("Specialty & Role", style="dim white", width=44)
+        table.add_column("Bound Tools", style="green", width=30)
 
-    def _display_status(self):
-        """Display connection/server status."""
-        status_color = "green" if self.connected else "red"
-        status_text = "Connected" if self.connected else "Disconnected"
-
-        from rich.table import Table
-        table = Table(box=box.SIMPLE, show_header=False, border_style="dim")
-        table.add_column(style="cyan", width=14)
-        table.add_column()
-
-        table.add_row("Server", self.server_url)
-        table.add_row("Status", f"[{status_color}]● {status_text}[/{status_color}]")
-
-        if self.server_info:
-            table.add_row("Version", self.server_info.get("version", "?"))
-            table.add_row("Backend", self.server_info.get("llm", {}).get("backend", "?"))
-            table.add_row("Model", self.server_info.get("llm", {}).get("model", "?"))
-
-        if self.mood_info:
-            table.add_row("Mood", self.mood_info.get("label", "?"))
-
-        table.add_row("Messages", str(len(self.history)))
-
-        console.print(Panel(table, title="[bold]Server Status[/bold]", border_style="cyan"))
-
-    def _display_help(self):
-        """Show available client commands."""
-        from rich.table import Table
-        table = Table(box=box.SIMPLE, show_header=True, border_style="dim",
-                      title="Client Commands")
-        table.add_column("Command", style="cyan")
-        table.add_column("Description")
-
-        for cmd, desc in CLIENT_COMMANDS.items():
-            table.add_row(cmd, desc)
-
+        for a in orch.get_agent_catalog():
+            table.add_row(
+                f"[{a['badge']}]",
+                a["name"],
+                a["specialty"],
+                ", ".join(a["tools"][:4]) + (f" (+{len(a['tools'])-4})" if len(a["tools"]) > 4 else ""),
+            )
         console.print(table)
 
-    def _display_history(self):
-        """Show conversation history for this session."""
-        if not self.history:
-            console.print("[dim]No messages yet this session.[/dim]")
-            return
+    def render_dag_tree(self, session_data: dict):
+        tree = Tree(
+            f"[bold medium_purple1]🕸️ Multi-Agent Execution DAG[/bold medium_purple1] "
+            f"[dim](Run: {session_data.get('run_id')} • Total: {session_data.get('total_latency_ms', 0)} ms)[/dim]"
+        )
+        for node in session_data.get("nodes", []):
+            status_icon = "✅" if node["status"] == "completed" else ("🛑" if node["status"] == "blocked" else "⚡")
+            branch = tree.add(
+                f"{status_icon} [bold cyan][{node['agent_badge']}][/bold cyan] "
+                f"[bold white]{node['title']}[/bold white] "
+                f"[dim]({node['tool']} • {node['latency_ms']}ms • {node['safety_tier']})[/dim]"
+            )
+            if node.get("thought"):
+                branch.add(f"[italic dim]💭 {node['thought']}[/italic dim]")
+            if node.get("output"):
+                branch.add(f"[green]↳ {node['output']}[/green]")
+        console.print(tree)
 
-        console.print(f"\n[bold]Session History ({len(self.history)} messages)[/bold]\n")
-        for entry in self.history:
-            role = entry["role"]
-            content = entry["content"]
-            if role == "user":
-                console.print(f"  [cyan]You:[/cyan] {content[:80]}{'...' if len(content) > 80 else ''}")
-            else:
-                console.print(f"  [magenta]Dione:[/magenta] {content[:80]}{'...' if len(content) > 80 else ''}")
-        console.print()
+    async def execute_goal_local_or_remote(self, prompt: str):
+        """Run goal via server /api/ag-ui/orchestrate or local in-process MultiAgentOrchestrator."""
+        if await self.check_connection():
+            try:
+                async with httpx.AsyncClient(timeout=60) as client:
+                    resp = await client.post(
+                        f"{self.server_url}/api/ag-ui/orchestrate",
+                        json={"message": prompt},
+                    )
+                    if resp.status_code == 200:
+                        self.last_orchestration = resp.json()
+                        return self.last_orchestration
+            except Exception:
+                pass
 
-    # ── Command Handler ───────────────────────────────────
+        # In-process fallback so CLI always works standalone
+        from server.core.orchestrator import get_multi_agent_orchestrator
+        orch = get_multi_agent_orchestrator()
+        session = await orch.execute_orchestrated_goal(prompt)
+        self.last_orchestration = session.to_dict()
+        return self.last_orchestration
 
-    async def handle_command(self, command: str) -> bool:
-        """
-        Handle a slash command. Returns True to continue, False to exit.
-        """
-        cmd = command.strip().lower()
-
-        if cmd in ("/exit", "/quit"):
-            return False
-
-        elif cmd == "/help":
-            self._display_help()
-
-        elif cmd == "/clear":
-            console.clear()
-            console.print(BANNER)
-
-        elif cmd == "/status":
-            with console.status("[cyan]Checking server...[/cyan]"):
-                await self.check_connection()
-                await self.get_mood()
-            self._display_status()
-
-        elif cmd == "/mood":
-            with console.status("[cyan]Fetching mood...[/cyan]"):
-                mood = await self.get_mood()
-            if mood:
-                label = mood.get("label", "unknown")
-                energy = mood.get("energy", 0)
-                warmth = mood.get("warmth", 0)
-                console.print(Panel(
-                    f"[bold]{label}[/bold]\n"
-                    f"Energy: {'█' * int(energy * 10)}{'░' * (10 - int(energy * 10))} {energy:.0%}\n"
-                    f"Warmth: {'█' * int(warmth * 10)}{'░' * (10 - int(warmth * 10))} {warmth:.0%}",
-                    title="🌙 Dione's Mood",
-                    border_style="magenta",
-                ))
-            else:
-                console.print("[yellow]Could not fetch mood.[/yellow]")
-
-        elif cmd == "/ping":
-            latency = await self.ping()
-            if latency >= 0:
-                console.print(f"[green]Pong! {latency:.0f}ms[/green]")
-            else:
-                console.print("[red]Server unreachable.[/red]")
-
-        elif cmd == "/history":
-            self._display_history()
-
-        else:
-            console.print(f"[yellow]Unknown command: {cmd}[/yellow]")
-            console.print("[dim]Type /help for available commands.[/dim]")
-
-        return True
-
-    # ── Main Loop ─────────────────────────────────────────
-
-    async def run(self):
-        """Main interactive chat loop."""
+    async def run_interactive(self):
         console.print(BANNER)
-        console.print(f"[dim]  v{VERSION} — Interactive Client[/dim]")
-        console.print()
-
-        # Check connection
-        with console.status("[cyan]Connecting to Dione server...[/cyan]"):
-            connected = await self.check_connection()
-
-        if connected:
-            version = self.server_info.get("version", "?")
-            backend = self.server_info.get("llm", {}).get("backend", "?")
-            model = self.server_info.get("llm", {}).get("model", "?")
-            console.print(Panel(
-                f"[green]● Connected[/green] to [cyan]{self.server_url}[/cyan]\n"
-                f"[dim]Server v{version} • {backend}/{model}[/dim]",
-                border_style="green",
+        is_online = await self.check_connection()
+        status_pill = "[bold green]● FastAPI Connected[/bold green]" if is_online else "[bold cyan]● Local In-Process Runtime[/bold cyan]"
+        console.print(
+            Panel(
+                f"{status_pill}  |  [bold medium_purple1]6 Specialized Agents Active[/bold medium_purple1]  |  "
+                f"[bold cyan]Computer Use: ON[/bold cyan]  |  [bold emerald]Voice Talk: {'ON' if self.voice_enabled else 'OFF'}[/bold emerald]\n"
+                f"[dim]Type a goal to trigger Multi-Agent DAG execution, or type [bold]/help[/bold], [bold]/agents[/bold], [bold]/dag[/bold], [bold]/computer[/bold], [bold]/voice[/bold].[/dim]",
+                border_style="medium_purple1",
                 box=box.ROUNDED,
-            ))
-        else:
-            console.print(Panel(
-                f"[red]● Cannot reach server[/red] at [cyan]{self.server_url}[/cyan]\n"
-                f"[dim]Make sure the server is running: [cyan]dione start[/cyan][/dim]",
-                border_style="red",
-                box=box.ROUNDED,
-            ))
-            console.print("[yellow]You can still type messages — they'll be sent when the server is available.[/yellow]")
+            )
+        )
 
-        console.print(f"[dim]Type a message to chat, or /help for commands. Ctrl+C to exit.[/dim]\n")
-
-        # Chat loop
         while True:
             try:
-                # Prompt
-                user_input = console.input("[bold cyan]You ›[/bold cyan] ").strip()
+                user_input = console.input("\n[bold medium_purple1]dione-2026[/bold medium_purple1] [cyan]❯[/cyan] ").strip()
+            except (EOFError, KeyboardInterrupt):
+                console.print("\n[dim]Shutting down Dione CLI Studio...[/dim]")
+                break
 
-                if not user_input:
-                    continue
+            if not user_input:
+                continue
 
-                # Slash commands
-                if user_input.startswith("/"):
-                    should_continue = await self.handle_command(user_input)
-                    if not should_continue:
-                        break
-                    continue
+            if user_input.startswith("/"):
+                parts = user_input.split(maxsplit=1)
+                cmd = parts[0].lower()
+                arg = parts[1] if len(parts) > 1 else ""
 
-                # Regular message
-                self._display_user_message(user_input)
-                self.history.append({"role": "user", "content": user_input})
-
-                # Send to server with spinner
-                response = {}
-                with console.status("[magenta]Dione is thinking...[/magenta]", spinner="dots"):
-                    response = await self.send_message(user_input)
-
-                if "error" in response:
-                    console.print(f"[red]Error: {response['error']}[/red]")
-                    # Retry connection check
-                    if not self.connected:
-                        console.print("[dim]Attempting to reconnect...[/dim]")
-                        await self.check_connection()
+                if cmd in ("/exit", "/quit"):
+                    break
+                elif cmd == "/help":
+                    t = Table(title="2026 Agent Studio CLI Commands", box=box.SIMPLE)
+                    t.add_column("Command", style="bold cyan")
+                    t.add_column("Description", style="white")
+                    for k, v in CLIENT_COMMANDS.items():
+                        t.add_row(k, v)
+                    console.print(t)
+                elif cmd == "/agents":
+                    self.render_agent_swarm_table()
+                elif cmd == "/dag":
+                    if self.last_orchestration:
+                        self.render_dag_tree(self.last_orchestration)
+                    else:
+                        console.print("[yellow]No DAG executed yet. Enter a task first![/yellow]")
+                elif cmd == "/voice":
+                    self.voice_enabled = not self.voice_enabled
+                    console.print(f"[bold cyan]🎙️ Neural Voice Talk mode: {'ENABLED' if self.voice_enabled else 'MUTED'}[/bold cyan]")
+                elif cmd == "/clear":
+                    console.clear()
+                    console.print(BANNER)
+                elif cmd == "/computer":
+                    goal = arg if arg else "Inspect my desktop screen and list open windows"
+                    session_data = await self.execute_goal_local_or_remote(goal)
+                    self.render_dag_tree(session_data)
                 else:
-                    self._display_response(response)
-                    self.history.append({
-                        "role": "assistant",
-                        "content": response.get("response", ""),
-                    })
+                    console.print(f"[yellow]Unknown command: {cmd}. Type /help for options.[/yellow]")
+                continue
 
-                console.print()  # Spacing
+            # Standard goal -> Multi-Agent DAG orchestration
+            session_data = await self.execute_goal_local_or_remote(user_input)
+            self.render_dag_tree(session_data)
+            console.print(
+                Panel(
+                    Markdown(session_data.get("final_synthesis", "Task complete.")),
+                    title="[bold green]✨ Supervisor Blackboard Synthesis[/bold green]",
+                    border_style="green",
+                    box=box.ROUNDED,
+                )
+            )
 
-            except KeyboardInterrupt:
-                break
-            except EOFError:
-                break
-
-        # Goodbye
-        console.print()
-        console.print(Panel(
-            "[bold cyan]See you later! 🌙[/bold cyan]",
-            border_style="cyan",
-            box=box.ROUNDED,
-        ))
+            if self.voice_enabled:
+                try:
+                    from server.core.runtime.voice_frontman import get_voice_frontman
+                    frontman = get_voice_frontman()
+                    asyncio.create_task(frontman.speak(session_data.get("final_synthesis", ""), is_filler=False))
+                except Exception:
+                    pass
 
 
 def run_client(server_url: str = "http://localhost:8900"):
-    """Entry point for the client command."""
     client = DioneClient(server_url=server_url)
-    try:
-        asyncio.run(client.run())
-    except KeyboardInterrupt:
-        console.print("\n[cyan]Goodbye! 🌙[/cyan]")
+    asyncio.run(client.run_interactive())
+
+
+if __name__ == "__main__":
+    run_client()

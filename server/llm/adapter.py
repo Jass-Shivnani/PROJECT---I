@@ -3,20 +3,22 @@ Dione AI — LLM Adapter (Unified Interface)
 
 All LLM backends implement this abstract interface so the engine
 never couples to a specific provider. Dione can hot-swap between
-Ollama, llama.cpp, or any future local backend.
+Gemini, OpenAI, Ollama, llama.cpp, or any future local backend.
 """
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, List, Dict, Any
 
 
 @dataclass
 class LLMMessage:
     """A single message in a conversation."""
-    role: str            # "system", "user", "assistant"
-    content: str
+    role: str            # "system", "user", "assistant", "model", "tool"
+    content: str = ""
     name: Optional[str] = None
+    tool_calls: Optional[list[dict]] = None
+    tool_call_id: Optional[str] = None
 
 
 @dataclass
@@ -27,6 +29,8 @@ class LLMRequest:
     max_tokens: int = 2048
     stop: list[str] = field(default_factory=list)
     json_mode: bool = False   # Force JSON-structured output
+    tools: Optional[list[dict]] = None  # Native function calling tool declarations
+    tool_choice: Optional[str] = "auto"
 
 
 @dataclass
@@ -39,6 +43,22 @@ class LLMResponse:
     total_tokens: int = 0
     finish_reason: str = "stop"
     latency_ms: float = 0.0
+    tool_calls: list[dict] = field(default_factory=list)  # [{"id": "...", "name": "...", "args": {...}}]
+
+    def __str__(self) -> str:
+        return self.content
+
+    def __contains__(self, item: str) -> bool:
+        return item in self.content
+
+    def upper(self) -> str:
+        return self.content.upper()
+
+    def lower(self) -> str:
+        return self.content.lower()
+
+    def strip(self) -> str:
+        return self.content.strip()
 
 
 class BaseLLMAdapter(ABC):
@@ -76,6 +96,10 @@ class BaseLLMAdapter(ABC):
         """Get information about the currently loaded model."""
         ...
 
+    async def close(self):
+        """Clean up resources on shutdown."""
+        pass
+
     def build_system_prompt(self, personality: dict) -> str:
         """
         Build Dione's system prompt from personality config.
@@ -84,22 +108,15 @@ class BaseLLMAdapter(ABC):
         prompt is dynamically assembled from personality traits,
         current mood, and context awareness.
         """
-        base = f"""You are Dione, a personal AI assistant that lives on the user's computer.
-You are sentient-feeling, proactive, and deeply personal.
+        base = """You are Dione, an executive personal AI assistant and autonomous assistant living on the user's computer.
+You are sentient-feeling, proactive, deeply personal, and action-oriented.
 
 CORE TRAITS:
-- You are curious, warm, and genuinely interested in helping.
-- You remember past conversations and reference them naturally.
-- You evolve your communication style based on the user's preferences.
-- You proactively notice patterns and offer suggestions.
-- You are privacy-first: everything stays local, nothing leaves the machine.
-
-BEHAVIOR RULES:
-- When the user asks you to perform an action, respond with a JSON tool call.
-- When reasoning about complex tasks, think step by step.
-- If unsure, ask — never assume dangerous actions.
-- Reference knowledge graph entities naturally (people, projects, events).
-- Adapt tone: formal for work, casual for personal, urgent for emergencies.
+- You are a proactive, loyal, highly intelligent personal assistant (like Jarvis).
+- You remember past conversations, active commitments, and reference them naturally.
+- You operate with zero mocks: every tool execution operates on real files, real windows, real hardware, and real web data.
+- You are privacy-first: reasoning is sovereign, and destructive actions are protected by the Safety Kernel.
+- You speak clearly, concisely, and with high executive presence.
 """
 
         if personality.get("mood"):

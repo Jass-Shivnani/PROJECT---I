@@ -100,7 +100,7 @@ class TelegramBotService:
                             await self._handle_inbound_message(message)
 
                     elif resp.status_code == 409:
-                        logger.warning("Telegram conflict: Another bot instance is polling. Waiting 10s...")
+                        logger.debug("Telegram conflict: Another bot instance is polling. Waiting 10s...")
                         await asyncio.sleep(10)
                     else:
                         await asyncio.sleep(2)
@@ -154,7 +154,7 @@ class TelegramBotService:
         # Process through Dione cognitive engine
         final_answer = ""
         try:
-            res = self.engine.process_message(text)
+            res = self.engine.process_message(text, conversation_id=f"telegram_{chat_id}")
             if hasattr(res, "__aiter__"):
                 async for step in res:
                     if hasattr(step, "state") and step.state in (EngineState.COMPLETE, EngineState.ERROR) and getattr(step, "final_answer", None):

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Dione AI — Initializing Neural Core</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: #07080f;
+      color: #f1f5f9;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      width: 100vw;
+      overflow: hidden;
+      user-select: none;
+    }
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+      max-width: 440px;
+      text-align: center;
+    }
+    .iris-wrapper {
+      position: relative;
+      width: 80px;
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .iris-core {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 100%);
+      box-shadow: 0 0 35px rgba(124, 58, 237, 0.65), 0 0 15px rgba(79, 70, 229, 0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 800;
+      color: #ffffff;
+      animation: pulse 2.2s ease-in-out infinite alternate;
+    }
+    .iris-ring {
+      position: absolute;
+      width: 76px;
+      height: 76px;
+      border-radius: 50%;
+      border: 1px dashed rgba(168, 85, 247, 0.45);
+      animation: spin 8s linear infinite;
+    }
+    .iris-glow {
+      position: absolute;
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(168, 85, 247, 0.25) 0%, transparent 70%);
+      animation: breathe 3s ease-in-out infinite alternate;
+    }
+    @keyframes spin {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+    @keyframes pulse {
+      0% { transform: scale(0.96); filter: brightness(0.9); }
+      100% { transform: scale(1.04); filter: brightness(1.15); }
+    }
+    @keyframes breathe {
+      0% { opacity: 0.4; }
+      100% { opacity: 0.9; }
+    }
+    .title-box h1 {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      background: linear-gradient(to right, #ffffff, #cbd5e1);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 6px;
+    }
+    .title-box p {
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      color: #94a3b8;
+      text-transform: uppercase;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .status-card {
+      width: 100%;
+      background: rgba(18, 20, 32, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 16px;
+      padding: 16px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      text-align: left;
+    }
+    .status-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11.5px;
+      color: #cbd5e1;
+    }
+    .status-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #a855f7;
+    }
+    .dot.ok {
+      background: #10b981;
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.6);
+    }
+    .dot.active {
+      background: #c084fc;
+      animation: ping 1s cubic-bezier(0, 0, 0.2, 1) infinite;
+    }
+    .badge {
+      font-size: 9.5px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.06);
+      color: #94a3b8;
+    }
+    .badge.ready {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+    }
+    .badge.booting {
+      background: rgba(168, 85, 247, 0.15);
+      color: #c084fc;
+      border: 1px solid rgba(168, 85, 247, 0.3);
+    }
+    .progress-bar-bg {
+      width: 100%;
+      height: 3px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      width: 30%;
+      background: linear-gradient(90deg, #7c3aed, #4f46e5);
+      border-radius: 999px;
+      animation: progress 2.5s ease-in-out infinite;
+    }
+    @keyframes progress {
+      0% { width: 10%; transform: translateX(-10%); }
+      50% { width: 60%; }
+      100% { width: 100%; transform: translateX(0); }
+    }
+    .footnote {
+      font-size: 10px;
+      color: #64748b;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="iris-wrapper">
+      <div class="iris-glow"></div>
+      <div class="iris-ring"></div>
+      <div class="iris-core">D</div>
+    </div>
+
+    <div class="title-box">
+      <h1>Dione AI Workspace</h1>
+      <p>Sovereign Local Intelligence Station</p>
+    </div>
+
+    <div class="status-card">
+      <div class="status-row">
+        <div class="status-label">
+          <span class="dot ok"></span>
+          <span>Native Desktop Station</span>
+        </div>
+        <span class="badge ready">Online</span>
+      </div>
+      <div class="status-row">
+        <div class="status-label">
+          <span class="dot ok"></span>
+          <span>Windows 11 Computer-Use Hooks</span>
+        </div>
+        <span class="badge ready">Ready</span>
+      </div>
+      <div class="status-row">
+        <div class="status-label">
+          <span class="dot active"></span>
+          <span id="step-desc">Loading Memory & 6-Agent Swarm...</span>
+        </div>
+        <span class="badge booting" id="step-badge">Connecting</span>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill"></div>
+      </div>
+    </div>
+
+    <div class="footnote" id="poll-info">
+      Connecting to local server on http://127.0.0.1:8900
+    </div>
+  </div>
+
+  <script>
+    const TARGET = 'http://127.0.0.1:8900';
+    let attempts = 0;
+
+    async function checkHealth() {
+      attempts++;
+      try {
+        const res = await fetch(TARGET + '/api/health', { cache: 'no-store' });
+        if (res.ok) {
+          document.getElementById('step-desc').innerText = 'Dione Ready · Launching Studio...';
+          document.getElementById('step-badge').innerText = 'Ready';
+          document.getElementById('step-badge').className = 'badge ready';
+          setTimeout(() => {
+            window.location.replace(TARGET);
+          }, 300);
+          return;
+        }
+      } catch (e) {
+        // Still spinning up
+      }
+
+      if (attempts > 5) {
+        document.getElementById('step-desc').innerText = 'Loading PyTorch embeddings & models...';
+      }
+      setTimeout(checkHealth, 500);
+    }
+
+    checkHealth();
+  </script>
+</body>
+</html>

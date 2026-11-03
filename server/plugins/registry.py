@@ -86,6 +86,8 @@ class PluginRegistry:
             # Register all tools from this plugin
             for tool in plugin.get_tools():
                 self._tools[tool.name] = tool
+                self._tools[tool.name.replace(".", "_")] = tool
+                self._tools[tool.method_name] = tool
                 logger.debug(f"  Registered tool: {tool.name}")
 
         except Exception as e:
@@ -93,7 +95,14 @@ class PluginRegistry:
 
     def get_tools_schema(self) -> list[dict]:
         """Get JSON schemas for all registered tools (for the LLM prompt)."""
-        return [tool.to_schema() for tool in self._tools.values()]
+        seen = set()
+        schemas = []
+        for tool in self._tools.values():
+            s = tool.to_schema()
+            if s["name"] not in seen:
+                seen.add(s["name"])
+                schemas.append(s)
+        return schemas
 
     async def execute(self, tool_name: str, params: dict) -> Any:
         """
@@ -152,3 +161,22 @@ class PluginRegistry:
                 "tools": tools,
             })
         return result
+
+    def list_tools(self) -> list[DioneTool]:
+        """Return unique list of registered DioneTool instances."""
+        seen = set()
+        unique: list[DioneTool] = []
+        for tool in self._tools.values():
+            key = tool.name.replace(".", "_")
+            if key not in seen:
+                seen.add(key)
+                unique.append(tool)
+        return unique
+
+    def get_tool(self, tool_name: str) -> Optional[DioneTool]:
+        """Retrieve a specific DioneTool by name or method_name."""
+        return (
+            self._tools.get(tool_name)
+            or self._tools.get(tool_name.replace(".", "_"))
+            or next((t for t in self._tools.values() if t.method_name == tool_name), None)
+        )

@@ -16,7 +16,7 @@ env/
 # Environment
 .env
 .env.local
-.env.example
+.env.*.local
 
 # Data (local storage - never commit)
 data/
@@ -34,6 +34,7 @@ pnpm-lock.yaml
 *.lock
 *_backup*
 requirements_backup.txt
+backup_pre_upgrade/
 .idea/
 .vscode/
 *.swp
@@ -55,9 +56,17 @@ mobile/dione_app/android/.gradle/
 mobile/dione_app/ios/Pods/
 mobile/dione_app/ios/.symlinks/
 
-# Logs
+# Logs & temp
 *.log
 logs/
+scratch/
+*.tmp
+*.node
+*.dll
+*.exe
+*.msi
+*.zip
+*.tar.gz
 
 # Model files (too large)
 *.gguf
@@ -66,17 +75,27 @@ models/
 
 # Build outputs
 installer_output/
-*.exe
-*.msi
 
-# External documentation repos
-docs/openclaw-main/
-docs/openclaw-main.zip
-docs/Synopsis.pdf
-
-# External reference repos & archives
+# External reference repos & temporary analysis
 references/
 archive/
+codex/
+codex-main/
+hermes-agent-main/
+openclaw_repo/
+docs/openclaw-main/
+docs/extracted_report_v2/
+docs/docx_actual_images/
+
+# Temporary test captures and text dumps
+test*.png
+real_screen_captured.png
+junction_check*.png
+*.txt
+*.jsonl
+all_highlighted_blocks.json
+new_turnitin_highlights_*.json
+received_*.json
 
 # Secrets
 credentials/
@@ -84,8 +103,6 @@ tokens/
 *.pem
 *.key
 
-# Large archives (>50MB) and office locks
-Dione_AI_Capstone_Group19.zip
-DIONE_FINAL_CAPSTONE_SUBMISSION.zip
+# Office locks
 ~$*
-docs/~$*
+docs/~$*

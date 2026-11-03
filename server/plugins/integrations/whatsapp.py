@@ -158,6 +158,20 @@ class WhatsAppIntegration(BaseIntegration):
         except Exception as e:
             return {"status": "error", "error": str(e), "qr": None}
     
+
+    def _resolve_contact_phone(self, to: str) -> str:
+        raw = str(to or "").strip()
+        if not raw or any(c.isdigit() for c in raw):
+            return raw
+        try:
+            from server.knowledge.social_intelligence import SocialIntelligenceEngine
+            dossier = SocialIntelligenceEngine().resolve_person(raw)
+            if dossier and dossier.phone:
+                return dossier.phone
+        except Exception:
+            pass
+        return raw
+
     async def send_message(
         self,
         to: str,
@@ -190,6 +204,7 @@ class WhatsAppIntegration(BaseIntegration):
                     return {"success": False, "error": "WhatsApp requires QR login before sending"}
                 return {"success": False, "error": f"WhatsApp not connected (status={status.get('status', 'unknown')})"}
 
+            to = self._resolve_contact_phone(to)
             result = await bridge.send_message(
                 to=to,
                 chat_id=chat_id,
