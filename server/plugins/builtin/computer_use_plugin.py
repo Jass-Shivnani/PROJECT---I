@@ -109,34 +109,47 @@ class ComputerUsePlugin(BasePlugin):
 
         for vk in vk_codes:
             user32.keybd_event(vk, 0, 0, 0)
-        time.sleep(0.02)
+        time.sleep(0.05)
         for vk in reversed(vk_codes):
             user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
+        time.sleep(0.05)
         return True
 
     def _click_native_win32(self, x: int, y: int, double: bool = False, right: bool = False) -> bool:
-        """Direct Win32 SetCursorPos + mouse_event execution."""
+        """Direct Win32 SetCursorPos + mouse_event execution with proper hover settle and hold duration."""
         import ctypes
         if not hasattr(ctypes, "windll"):
             return False
         user32 = ctypes.windll.user32
+        MOUSEEVENTF_MOVE = 0x0001
         MOUSEEVENTF_LEFTDOWN = 0x0002
         MOUSEEVENTF_LEFTUP = 0x0004
         MOUSEEVENTF_RIGHTDOWN = 0x0008
         MOUSEEVENTF_RIGHTUP = 0x0010
 
+        # 1. Move cursor to target position
         user32.SetCursorPos(int(x), int(y))
-        time.sleep(0.02)
+        # 2. Dispatch MOUSEEVENTF_MOVE to trigger hover / WM_MOUSEMOVE handlers in Electron / Chromium / Games
+        user32.mouse_event(MOUSEEVENTF_MOVE, 0, 0, 0, 0)
+        time.sleep(0.06)  # Settle hover state
+
+        # 3. Perform click with deliberate hold duration (75ms)
         if right:
             user32.mouse_event(MOUSEEVENTF_RIGHTDOWN, 0, 0, 0, 0)
+            time.sleep(0.075)
             user32.mouse_event(MOUSEEVENTF_RIGHTUP, 0, 0, 0, 0)
         else:
             user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+            time.sleep(0.075)
             user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
             if double:
-                time.sleep(0.04)
+                time.sleep(0.12)
                 user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+                time.sleep(0.075)
                 user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+        
+        # 4. Brief settle delay after click
+        time.sleep(0.12)
         return True
 
     def _list_native_win32_windows(self) -> List[Dict[str, Any]]:
@@ -391,21 +404,32 @@ class ComputerUsePlugin(BasePlugin):
         desc_clean = description.strip()
         desc_low = desc_clean.lower()
 
-        # 1. Fast recursive UIA lookup in foreground window
+        # 1. High-precision recursive UIA lookup in foreground window
         uia_elements = self._extract_active_uia_elements(max_elements=60)
         best_match = None
+        # Exact match first
         for el in uia_elements:
-            el_name = el["name"].lower()
-            if desc_low == el_name or desc_low in el_name or el_name in desc_low:
+            el_name = el["name"].lower().strip()
+            if el_name and desc_low == el_name:
                 best_match = el
                 break
+
+        # Substring / partial match with strict length guards to prevent false matches
+        if not best_match:
+            for el in uia_elements:
+                el_name = el["name"].lower().strip()
+                if not el_name or len(el_name) < 2:
+                    continue
+                if (desc_low in el_name) or (len(el_name) >= 3 and el_name in desc_low):
+                    best_match = el
+                    break
 
         if best_match:
             cx, cy = best_match["center"]
             self._click_native_win32(cx, cy, double=double, right=right_click)
             return f"Located '{best_match['name']}' ({best_match['type']}) via Windows UIA and clicked at ({cx}, {cy})."
 
-        # 2. Multimodal Gemini Vision Grounding
+        # 2. Multimodal Gemini Vision Grounding (Sub-pixel bounding box localization)
         try:
             info = await self._capture_frame_to_disk_and_ui()
             jpg_bytes = info.pop("_raw_jpeg_bytes", None)
@@ -418,11 +442,12 @@ class ComputerUsePlugin(BasePlugin):
 
                 client = genai.Client(api_key=api_key)
                 v_prompt = (
-                    f"Locate the UI element described as: \\\"{desc_clean}\\\" on this {sw}x{sh} screen.\\n"
-                    f"Return ONLY a JSON object with 0-1000 normalized bounding box coordinates:\\n"
+                    f"You are a high-precision computer vision element locator.\n"
+                    f"Carefully locate the exact UI element, button, tab, icon, or control described as: \\\"{desc_clean}\\\" on this {sw}x{sh} desktop screen.\n"
+                    f"Return ONLY a JSON object with 0-1000 normalized bounding box coordinates tightly bounding the element:\n"
                     f'{{\"box_2d\": [ymin, xmin, ymax, xmax]}}'
                 )
-                for v_model in ["gemini-3.5-flash-lite", "gemini-2.5-flash-lite", "gemini-3.8-flash", "gemini-2.5-flash"]:
+                for v_model in ["gemini-2.5-flash", "gemini-3.5-flash-lite", "gemini-2.5-flash-lite"]:
                     try:
                         resp = await client.aio.models.generate_content(
                             model=v_model,
@@ -431,7 +456,7 @@ class ComputerUsePlugin(BasePlugin):
                                 v_prompt,
                             ],
                             config=types.GenerateContentConfig(
-                                temperature=0.1,
+                                temperature=0.05,
                                 response_mime_type="application/json",
                             ),
                         )
@@ -445,7 +470,7 @@ class ComputerUsePlugin(BasePlugin):
                                 cx = int(((xmin + xmax) / 2.0) / 1000.0 * sw)
                                 cy = int(((ymin + ymax) / 2.0) / 1000.0 * sh)
                                 self._click_native_win32(cx, cy, double=double, right=right_click)
-                                return f"Visually located '{desc_clean}' via {v_model} and clicked at pixel ({cx}, {cy})."
+                                return f"Visually located '{desc_clean}' via {v_model} and clicked at exact pixel ({cx}, {cy})."
                     except Exception as ve:
                         logger.debug(f"[VisionClick] {v_model} note: {ve}")
                         continue
@@ -636,16 +661,19 @@ class ComputerUsePlugin(BasePlugin):
         try:
             if "chrome" in b_choice and CHROME_EXE.exists():
                 subprocess.Popen([str(CHROME_EXE), fs_flag, target_url])
-                await asyncio.sleep(0.6)
+                await asyncio.sleep(1.2)
                 self._focus_window_by_keyword("chrome")
+                await asyncio.sleep(0.4)
                 return f"Opened Google Chrome to {target_url} (fullscreen={fullscreen})"
             elif "edge" in b_choice and EDGE_EXE.exists():
                 subprocess.Popen([str(EDGE_EXE), fs_flag, target_url])
-                await asyncio.sleep(0.6)
+                await asyncio.sleep(1.2)
                 self._focus_window_by_keyword("edge")
+                await asyncio.sleep(0.4)
                 return f"Opened Microsoft Edge to {target_url} (fullscreen={fullscreen})"
             else:
                 webbrowser.open(target_url)
+                await asyncio.sleep(1.0)
                 return f"Opened default browser to {target_url}"
         except Exception as e:
             webbrowser.open(target_url)
@@ -746,6 +774,7 @@ class ComputerUsePlugin(BasePlugin):
         # First check if already open and focus it
         existing = self._focus_window_by_keyword(a_lower)
         if existing:
+            await asyncio.sleep(0.6)
             return f"Focused already-running window: '{existing['title']}'."
 
         known_map = {
@@ -768,8 +797,9 @@ class ComputerUsePlugin(BasePlugin):
         if cmd_args:
             try:
                 subprocess.Popen(cmd_args, shell=(cmd_args[0] in ("cmd", "code")))
-                await asyncio.sleep(0.8)
+                await asyncio.sleep(1.8)
                 self._focus_window_by_keyword(a_lower)
+                await asyncio.sleep(0.6)
                 return f"Launched and focused '{app}'."
             except Exception as e:
                 logger.debug(f"Known app launch fallback: {e}")
@@ -777,7 +807,9 @@ class ComputerUsePlugin(BasePlugin):
         # Fallback to Windows start protocol or Hermes list_apps
         try:
             subprocess.Popen(f'start "" "{app}"', shell=True)
-            await asyncio.sleep(0.8)
+            await asyncio.sleep(1.8)
+            self._focus_window_by_keyword(a_lower)
+            await asyncio.sleep(0.6)
             return f"Launched application '{app}'."
         except Exception as e:
             return f"Could not launch '{app}': {e}"

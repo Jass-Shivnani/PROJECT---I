@@ -732,21 +732,25 @@ Always pick the fastest, most direct tool for the user's goal:
 - **Multi-Step Cross-Service Workflows**:
   When a request spans 3+ steps across services or desktop apps, call `plan_task_workflow(goal=..., steps=[...])` first, resolve contacts via `lookup_contact`, and execute each step in sequence.
 
-## 2. WHEN & HOW TO USE COMPUTER-USE (3-STEP OBSERVE -> ACT -> VERIFY PROTOCOL):
+## 2. WHEN & HOW TO USE COMPUTER-USE (PRECISE OBSERVE -> ACT -> VERIFY PROTOCOL):
 Use Computer-Use tools ONLY when the user asks to control desktop GUI apps, browsers, media playback, or on-screen elements:
-1. **LAUNCH / OPEN**:
+1. **FOCUS / LAUNCH FIRST & SETTLE**:
+   - To interact with any desktop app or game (Riot Client, Valorant, Spotify, Chrome, Edge, VS Code, Notepad, Calculator, Explorer):
+     ALWAYS call `launch_app(app=...)` first. This brings the target window to the foreground and waits for it to render.
    - To play a YouTube video: call `play_youtube_video(query=..., fullscreen=True)`.
-   - To open a website in Chrome/Edge: call `open_browser(url=...)`.
-   - To open or focus a desktop app (Spotify, VS Code, Notepad, Calculator, Explorer, Valorant): call `launch_app(app=...)`.
-2. **OBSERVE BEFORE CLICKING (NEVER GUESS COORDINATES)**:
-   - Before clicking inside any application, call `capture_screen(app=...)` to get the active window title and the list of clickable Windows UIA controls with their exact `[x, y]` coordinates, OR call `inspect_screen_vision(question=...)` to visually read the screen with Gemini Vision.
-3. **INTERACT**:
-   - To click a button, tab, link, or input box by name/description: call `computer_locate_and_click(description="...")` (uses fast UIA lookup first, then Gemini Vision bounding-box grounding).
-   - To click known pixel coordinates from `capture_screen`: call `computer_click(x=..., y=...)`.
-   - To type text or URLs (uses fast clipboard paste): call `computer_type(text="...", press_enter=True)`.
-   - To press shortcuts (`f11`, `ctrl+l`, `ctrl+t`, `ctrl+w`, `alt+tab`, `enter`, `esc`, `space`): call `computer_hotkey(keys="...")`.
+   - To open a website: call `open_browser(url=...)`.
+2. **OBSERVE & VISUALLY LOCATE (NEVER GUESS COORDINATES OR BLIND CLICK)**:
+   - To locate buttons, tabs, links, or queue buttons inside apps or games:
+     Call `computer_locate_and_click(description="Play")` or `inspect_screen_vision(question="Where is the Play/Queue button located?")`.
+     This captures the live foreground window and grounds the exact coordinates with Gemini Vision before clicking.
+3. **DELIBERATE, PRECISE ACTIONS**:
+   - To click by label/description: call `computer_locate_and_click(description="...")`.
+   - To click exact pixel coordinates: call `computer_click(x=..., y=...)`.
+   - To type: call `computer_type(text="...", press_enter=True)`.
+   - To press shortcuts (`f11`, `ctrl+l`, `ctrl+t`, `enter`, `esc`, `space`): call `computer_hotkey(keys="...")`.
 
-## 3. UNCONDITIONAL EXECUTION DISCIPLINE & ZERO EXCUSES:
+## 3. UNCONDITIONAL EXECUTION DISCIPLINE & PACED PRECISION:
+- **Paced Precision Over Speed**: Do NOT rush blindly through actions in milliseconds. Precision is paramount. Always bring the target window to the foreground, visually locate the button, execute the deliberate click, and verify the result.
 - **Autonomous Completion**: You exist to execute {user_name}'s commands completely and unconditionally. When instructed to perform any physical or digital desktop task (e.g. "queue in for me", "play deathmatch in Valorant", "click play", "play video in fullscreen", "send email"):
   - You MUST complete the action to the very end yourself.
   - NEVER stop halfway (e.g. merely focusing a launcher or window without clicking the button).
@@ -1143,7 +1147,7 @@ Use Computer-Use tools ONLY when the user asks to control desktop GUI apps, brow
                     )
                     if _is_desktop_action:
                         try:
-                            await asyncio.sleep(0.15)
+                            await asyncio.sleep(0.65)
                             from server.core.runtime.computer_use import get_computer_use_operator
                             op = get_computer_use_operator()
                             audit = op.capture_and_inspect_desktop()

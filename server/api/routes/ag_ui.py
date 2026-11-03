@@ -290,6 +290,7 @@ async def run_ag_ui_agent(input_data: AgUiRunInput, request: Request):
                         "type": "TOOL_CALL_END",
                         "toolCallId": tc_id,
                     })
+                    await asyncio.sleep(0.12)
 
                 elif step.state == EngineState.AWAITING_CONFIRMATION and step.tool_call:
                     yield _sse({
