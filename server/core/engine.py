@@ -753,6 +753,9 @@ Use Computer-Use tools ONLY when the user asks to control desktop GUI apps, brow
    - To click exact pixel coordinates: call `computer_click(x=..., y=...)`.
    - To type: call `computer_type(text="...", press_enter=True)`.
    - To press shortcuts (`f11`, `ctrl+l`, `ctrl+t`, `enter`, `esc`, `space`): call `computer_hotkey(keys="...")`.
+   - To draw shapes, circles, or drag:
+     * To draw a circle in Paint or a canvas: call `computer_draw_circle(center_x=700, center_y=500, radius=80)`.
+     * To drag with mouse held down: call `computer_drag(start_x=..., start_y=..., end_x=..., end_y=...)`.
 
 ## 3. UNCONDITIONAL EXECUTION DISCIPLINE & PACED PRECISION:
 - **Paced Precision Over Speed**: Do NOT rush blindly through actions in milliseconds. Precision is paramount. Always bring the target window to the foreground, visually locate the button, execute the deliberate click, and verify the result.

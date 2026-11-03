@@ -25,12 +25,14 @@ OBSERVATION_OR_PREP_TOOLS = {
     "launch_app",
 }
 
-# Physical interaction tools that actually click, type, or press keys inside a target window
+# Physical interaction tools that actually click, type, drag, draw, or press keys inside a target window
 INTERACTIVE_INPUT_TOOLS = {
     "computer_locate_and_click",
     "computer_click",
     "computer_type",
     "computer_hotkey",
+    "computer_drag",
+    "computer_draw_circle",
     "play_youtube_video",
 }
 
@@ -90,6 +92,10 @@ def prompt_requires_in_app_interaction(user_prompt: str) -> Tuple[bool, str]:
     # Explicit typing / writing into an app
     if any(k in p for k in ("type ", "write ", "enter text", "paste ", "search for ", "calculate ", "compute ")):
         return True, "Focus the target input area and enter the requested text/calculation using `computer_type(text=..., press_enter=True)` or `computer_hotkey`."
+
+    # Explicit drawing / canvas interaction requests
+    if any(k in p for k in ("draw", "paint a", "sketch", "circle", "rectangle", "square", "canvas", "shape")):
+        return True, "Draw the requested shape on the canvas using `computer_draw_circle(center_x=700, center_y=500, radius=80)` or `computer_drag`."
 
     return False, ""
 
@@ -178,6 +184,7 @@ def verify_goal_on_desktop(
     app_keywords = {
         "notepad": ["notepad", "untitled"],
         "calculator": ["calc", "calculator"],
+        "paint": ["paint", "mspaint"],
         "chrome": ["chrome", "google chrome"],
         "edge": ["edge", "microsoft edge"],
         "code": ["visual studio code", "vs code", "code"],
@@ -210,7 +217,7 @@ def verify_goal_on_desktop(
     if needs_interaction:
         has_performed_interactive_input = any(
             t in INTERACTIVE_INPUT_TOOLS
-            or (t == "computer_use" and str(tool_params.get("action", "")).lower() in ("click", "double_click", "right_click", "type", "key"))
+            or (t == "computer_use" and str(tool_params.get("action", "")).lower() in ("click", "double_click", "right_click", "type", "key", "drag", "draw_circle"))
             for t in history
         )
         if not has_performed_interactive_input:

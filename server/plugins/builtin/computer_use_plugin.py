@@ -27,6 +27,7 @@ import hashlib
 import io
 import json
 import logging
+import math
 import os
 import re
 import subprocess
@@ -177,6 +178,76 @@ class ComputerUsePlugin(BasePlugin):
 
         # 3. 120ms post-click settle delay
         time.sleep(0.12)
+        return True
+
+    def _drag_native_win32(self, start_x: int, start_y: int, end_x: int, end_y: int, steps: int = 25) -> bool:
+        """Perform a smooth native Win32 mouse drag from (start_x, start_y) to (end_x, end_y)."""
+        import ctypes
+        if not hasattr(ctypes, "windll"):
+            return False
+        self._bind_interactive_desktop()
+        user32 = ctypes.windll.user32
+        MOUSEEVENTF_MOVE = 0x0001
+        MOUSEEVENTF_LEFTDOWN = 0x0002
+        MOUSEEVENTF_LEFTUP = 0x0004
+
+        # 1. Move to start position and hover
+        user32.SetCursorPos(int(start_x), int(start_y))
+        user32.mouse_event(MOUSEEVENTF_MOVE, 0, 0, 0, 0)
+        time.sleep(0.06)
+
+        # 2. Press left mouse button down
+        user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+        time.sleep(0.04)
+
+        # 3. Interpolate movement
+        for i in range(1, steps + 1):
+            curr_x = int(start_x + (end_x - start_x) * (i / steps))
+            curr_y = int(start_y + (end_y - start_y) * (i / steps))
+            user32.SetCursorPos(curr_x, curr_y)
+            user32.mouse_event(MOUSEEVENTF_MOVE, 0, 0, 0, 0)
+            time.sleep(0.012)
+
+        # 4. Release left mouse button
+        time.sleep(0.04)
+        user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+        time.sleep(0.08)
+        return True
+
+    def _draw_circle_native_win32(self, center_x: int, center_y: int, radius: int = 80, steps: int = 40) -> bool:
+        """Physically draw a circle on screen (e.g. in Paint canvas) by dragging mouse along circumference."""
+        import ctypes
+        if not hasattr(ctypes, "windll"):
+            return False
+        self._bind_interactive_desktop()
+        user32 = ctypes.windll.user32
+        MOUSEEVENTF_MOVE = 0x0001
+        MOUSEEVENTF_LEFTDOWN = 0x0002
+        MOUSEEVENTF_LEFTUP = 0x0004
+
+        # Start at 0 radians: (center_x + radius, center_y)
+        start_x = int(center_x + radius)
+        start_y = int(center_y)
+        user32.SetCursorPos(start_x, start_y)
+        user32.mouse_event(MOUSEEVENTF_MOVE, 0, 0, 0, 0)
+        time.sleep(0.08)
+
+        # Mouse down
+        user32.mouse_event(MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0)
+        time.sleep(0.05)
+
+        # Trace circumference (2 * pi)
+        for i in range(1, steps + 1):
+            angle = (2.0 * math.pi * i) / steps
+            px = int(center_x + radius * math.cos(angle))
+            py = int(center_y + radius * math.sin(angle))
+            user32.SetCursorPos(px, py)
+            user32.mouse_event(MOUSEEVENTF_MOVE, 0, 0, 0, 0)
+            time.sleep(0.015)
+
+        time.sleep(0.05)
+        user32.mouse_event(MOUSEEVENTF_LEFTUP, 0, 0, 0, 0)
+        time.sleep(0.08)
         return True
 
     def _list_native_win32_windows(self) -> List[Dict[str, Any]]:
@@ -640,6 +711,17 @@ class ComputerUsePlugin(BasePlugin):
             ok = self._click_native_win32(x, y, double=(act == "double_click"), right=(act == "right_click"))
             return json.dumps({"ok": ok, "action": act, "coordinate": [x, y]})
 
+        if act in ("drag", "mouse_drag", "left_click_drag") and coordinate and len(coordinate) >= 4:
+            ok = self._drag_native_win32(int(coordinate[0]), int(coordinate[1]), int(coordinate[2]), int(coordinate[3]))
+            return json.dumps({"ok": ok, "action": act, "from": coordinate[:2], "to": coordinate[2:4]})
+
+        if act in ("draw_circle", "circle"):
+            cx = int(coordinate[0]) if coordinate and len(coordinate) >= 2 else 700
+            cy = int(coordinate[1]) if coordinate and len(coordinate) >= 2 else 500
+            r = int(amount or 80)
+            ok = self._draw_circle_native_win32(cx, cy, radius=r)
+            return json.dumps({"ok": ok, "action": act, "center": [cx, cy], "radius": r})
+
         if act == "type" and text is not None:
             return await self.computer_type(text=text, press_enter=False)
 
@@ -758,6 +840,26 @@ class ComputerUsePlugin(BasePlugin):
         """Trigger keyboard shortcut directly via Win32 hardware scan codes (50ms hold)."""
         ok = self._send_native_win32_key(keys)
         return f"Pressed hotkey '{keys}' (success={ok})."
+
+    @dione_tool(
+        description="Drag the mouse from (start_x, start_y) to (end_x, end_y) with left mouse button held down.",
+        permission_level="execute",
+        requires_confirmation=False,
+    )
+    async def computer_drag(self, start_x: int, start_y: int, end_x: int, end_y: int) -> str:
+        """Drag mouse with left button held down between two screen coordinates."""
+        ok = self._drag_native_win32(start_x, start_y, end_x, end_y)
+        return f"Dragged mouse from ({start_x}, {start_y}) to ({end_x}, {end_y}) [success={ok}]."
+
+    @dione_tool(
+        description="Physically draw a circle on the active window or canvas (e.g. Paint) by holding mouse left button down and tracing circumference around (center_x, center_y) with given radius (default 80px).",
+        permission_level="execute",
+        requires_confirmation=False,
+    )
+    async def computer_draw_circle(self, center_x: int = 700, center_y: int = 500, radius: int = 80) -> str:
+        """Physically draw a smooth circle on screen (such as Paint canvas) via parametric mouse tracing."""
+        ok = self._draw_circle_native_win32(center_x, center_y, radius=radius)
+        return f"Drew circle centered at ({center_x}, {center_y}) with radius {radius}px on active canvas [success={ok}]."
 
     @dione_tool(
         description="Open Microsoft Edge or Google Chrome to a URL (automatically prepends https:// if needed).",

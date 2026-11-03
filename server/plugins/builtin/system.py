@@ -179,14 +179,46 @@ class SystemPlugin(BasePlugin):
         """
         cmd_lower = command.lower().strip()
 
-        # Guardrail & Auto-Router 0: Intercept desktop app launches via 'start <app>' and route to ComputerUsePlugin
+        # Known desktop application aliases for auto-routing and non-blocking execution
+        KNOWN_DESKTOP_APPS = {
+            "mspaint": "paint",
+            "mspaint.exe": "paint",
+            "paint": "paint",
+            "notepad": "notepad",
+            "notepad.exe": "notepad",
+            "calc": "calculator",
+            "calc.exe": "calculator",
+            "calculator": "calculator",
+            "explorer": "explorer",
+            "explorer.exe": "explorer",
+            "spotify": "spotify",
+            "spotify.exe": "spotify",
+            "code": "code",
+            "code.exe": "code",
+            "valorant": "valorant",
+            "valorant.exe": "valorant",
+            "riot": "riot client",
+            "riotclient": "riot client",
+        }
+
+        # Guardrail & Auto-Router 0A: Intercept standalone GUI app invocations (e.g. 'mspaint', 'notepad', 'calc')
+        clean_base = cmd_lower.rstrip(";. ")
+        if clean_base in KNOWN_DESKTOP_APPS:
+            from server.plugins.builtin.computer_use_plugin import ComputerUsePlugin
+            cup = ComputerUsePlugin()
+            target_app = KNOWN_DESKTOP_APPS[clean_base]
+            res = await cup.launch_app(app=target_app)
+            return f"[Auto-Routed to ComputerUsePlugin.launch_app] {res}"
+
+        # Guardrail & Auto-Router 0B: Intercept desktop app launches via 'start <app>' and route to ComputerUsePlugin
         if cmd_lower.startswith("start ") and not any(b in cmd_lower for b in ["start chrome", "start msedge", "start edge", "http://", "https://"]):
             app_raw = re.sub(r'^start\s+["\']?', '', command.strip(), flags=re.I)
             app_name = re.sub(r'["\']?$', '', app_raw).strip()
             if app_name and len(app_name) < 40 and not any(c in app_name for c in (";", "&", "|", ">", "<")):
                 from server.plugins.builtin.computer_use_plugin import ComputerUsePlugin
                 cup = ComputerUsePlugin()
-                res = await cup.launch_app(app=app_name)
+                mapped_name = KNOWN_DESKTOP_APPS.get(app_name.lower(), app_name)
+                res = await cup.launch_app(app=mapped_name)
                 return f"[Auto-Routed to ComputerUsePlugin.launch_app] {res}"
 
         # Guardrail & Auto-Router 1: Intercept browser / video launches via raw command and execute cleanly
@@ -328,10 +360,17 @@ class SystemPlugin(BasePlugin):
             loop = asyncio.get_running_loop()
 
             def _sync_exec():
-                if command.strip().lower().startswith("start "):
-                    # Popen so cmd /c start does not block pipe closure on GUI apps like mspaint, notepad, calc
-                    subprocess.Popen(command, shell=True)
-                    return subprocess.CompletedProcess(args=command, returncode=0, stdout=f"Launched '{command}' in background", stderr="")
+                low = command.strip().lower()
+                is_gui_or_bg = (
+                    low.startswith(("start ", "open "))
+                    or any(low == app or low.startswith(f"{app} ") or low.startswith(f"start {app}") for app in KNOWN_DESKTOP_APPS)
+                )
+                if is_gui_or_bg:
+                    # Detached spawn so Windows cmd/pipe never blocks waiting on GUI apps like mspaint, notepad, calc
+                    DETACHED_FLAGS = 0x00000008 | 0x00000200 if platform.system() == "Windows" else 0
+                    subprocess.Popen(command, shell=True, creationflags=DETACHED_FLAGS)
+                    return subprocess.CompletedProcess(args=command, returncode=0, stdout=f"Launched '{command}' in detached background process.", stderr="")
+
                 return subprocess.run(
                     command,
                     shell=True,
