@@ -26,7 +26,7 @@ from server.core.orchestrator import get_multi_agent_orchestrator
 
 @dataclass
 class LiveFlashConfig:
-    live_frontman_model: str = "gemini-2.5-flash-native-audio-latest"
+    live_frontman_model: str = "models/gemini-3.8-live-extended-thinking"
     reasoning_model: str = "gemini-3.8-flash"
     background_flash_model: str = "gemini-3.5-flash-lite"
     thinking_budget: int = 8192
