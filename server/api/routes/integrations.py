@@ -1,12 +1,15 @@
 """
-Dione AI — Integration Routes
+Dione AI — Integration Routes (v4.0 Demo-Hardened Edition)
 
-Manage external service integrations (Unified Google OAuth2, Gmail, Drive, Calendar, Photos, WhatsApp, Telegram, Slack, Instagram)
-with runtime permission grants, tool execution, and connection lifecycle.
+Manage external service integrations (Unified Google OAuth2, Gmail, Drive, Calendar, Photos,
+WhatsApp, Telegram, Slack, Instagram) with full compatibility across both REST conventions
+(`/api/integrations/`, `/api/integrations/status`, `/api/integrations/google/connect`,
+`/api/integrations/google/oauth`, `/api/integrations/{integration_id}/connect`, and `/api/integrations/connect`).
 """
 
 from __future__ import annotations
 
+from typing import Optional
 from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
@@ -15,6 +18,10 @@ router = APIRouter()
 
 class IntegrationConnectRequest(BaseModel):
     params: dict = {}
+    service_id: Optional[str] = None
+    credentials: Optional[dict] = None
+    client_secret_path: Optional[str] = None
+    access_token: Optional[str] = None
 
 
 class IntegrationPermissionRequest(BaseModel):
@@ -26,23 +33,68 @@ class IntegrationToolRequest(BaseModel):
     params: dict = {}
 
 
-@router.get("/")
-async def list_integrations(request: Request):
-    integrations = getattr(request.app.state, "integrations", None)
+def _format_registry_response(integrations) -> dict:
     if not integrations:
         return {"total": 0, "connected": 0, "integrations": []}
+    data = integrations.to_dict()
+    for item in data.get("integrations", []):
+        if "service_id" not in item and "id" in item:
+            item["service_id"] = item["id"]
+        if "connected" not in item:
+            item["connected"] = (item.get("status") == "connected")
+    return data
 
-    return integrations.to_dict()
+
+@router.get("/")
+@router.get("/status")
+async def list_integrations(request: Request):
+    integrations = getattr(request.app.state, "integrations", None)
+    return _format_registry_response(integrations)
 
 
 @router.post("/google/connect")
+@router.post("/google/oauth")
 async def connect_unified_google(body: IntegrationConnectRequest, request: Request):
     """One-click Unified Google OAuth2 login across Gmail, Calendar, Drive, and Photos."""
     integrations = getattr(request.app.state, "integrations", None)
     if not integrations:
-        return {"success": False, "error": "Integrations are not initialized"}
+        return {"success": False, "connected": False, "error": "Integrations are not initialized"}
 
-    return await integrations.connect_google_unified(body.params or {})
+    merged_params = dict(body.params or {})
+    if body.credentials:
+        merged_params.update(body.credentials)
+    if body.client_secret_path:
+        merged_params["client_secret_path"] = body.client_secret_path
+    if body.access_token:
+        merged_params["access_token"] = body.access_token
+
+    res = await integrations.connect_google_unified(merged_params)
+    res["connected"] = bool(res.get("success"))
+    if res["connected"]:
+        res["message"] = f"Connected Unified Google Workspace ({', '.join(res.get('connected_services', []))})"
+    else:
+        res["message"] = res.get("error", "Unified Google OAuth2 requires client_secret.json or access_token.")
+    return res
+
+
+@router.post("/connect")
+async def connect_integration_by_body(body: IntegrationConnectRequest, request: Request):
+    """Connect an integration specified by `service_id` in the request body."""
+    integrations = getattr(request.app.state, "integrations", None)
+    if not integrations:
+        return {"success": False, "connected": False, "error": "Integrations are not initialized"}
+
+    service_id = (body.service_id or "").strip()
+    merged_params = dict(body.params or {})
+    if body.credentials:
+        merged_params.update(body.credentials)
+    if not service_id:
+        return await connect_unified_google(body, request)
+
+    res = await integrations.connect(service_id, merged_params)
+    res["connected"] = bool(res.get("success"))
+    res["message"] = f"Connected {service_id}" if res["connected"] else (res.get("error") or f"Failed to connect {service_id}")
+    return res
 
 
 @router.post("/verify-all")
@@ -56,7 +108,7 @@ async def verify_all_integrations(request: Request):
     return {
         "success": True,
         "statuses": {k: v.value for k, v in statuses.items()},
-        "registry": integrations.to_dict(),
+        "registry": _format_registry_response(integrations),
     }
 
 
@@ -98,9 +150,14 @@ async def grant_permissions(integration_id: str, body: IntegrationPermissionRequ
 async def connect_integration(integration_id: str, body: IntegrationConnectRequest, request: Request):
     integrations = getattr(request.app.state, "integrations", None)
     if not integrations:
-        return {"success": False, "error": "Integrations are not initialized"}
+        return {"success": False, "connected": False, "error": "Integrations are not initialized"}
 
-    return await integrations.connect(integration_id, body.params or {})
+    merged_params = dict(body.params or {})
+    if body.credentials:
+        merged_params.update(body.credentials)
+    res = await integrations.connect(integration_id, merged_params)
+    res["connected"] = bool(res.get("success"))
+    return res
 
 
 @router.post("/{integration_id}/disconnect")

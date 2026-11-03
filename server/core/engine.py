@@ -65,7 +65,12 @@ from server.llm.adapter import LLMRequest, LLMMessage, LLMResponse
 from server.core.loop_detector import ToolLoopDetector
 
 from server.core.tool_truncator import truncate_tool_result_text
-from server.core.goal_verifier import verify_goal_on_desktop
+from server.core.goal_verifier import (
+    verify_goal_on_desktop,
+    detect_stubborn_refusal_or_delegation,
+    prompt_requires_in_app_interaction,
+    INTERACTIVE_INPUT_TOOLS,
+)
 
 from server.llm.turn_validator import validate_gemini_turns
 
@@ -1138,6 +1143,8 @@ Use Computer-Use tools ONLY when the user asks to control desktop GUI apps, brow
                         err = str(exc)
 
                     final_raw_text = res_str if success else f"Error: {err}"
+                    if clean_tool_name not in state_tracker.setdefault("executed_tools_history", []):
+                        state_tracker["executed_tools_history"].append(clean_tool_name)
 
                     # 4.1 Fast Post-Action Desktop Audit (Only on GUI mutations, 150ms settle)
                     _is_desktop_action = (
@@ -1177,12 +1184,14 @@ Use Computer-Use tools ONLY when the user asks to control desktop GUI apps, brow
 
                             # Closed-Loop Empirical Goal Verification
                             u_msg = state_tracker.get("user_message", "")
+                            state_tracker.setdefault("executed_tools_history", []).append(clean_tool_name)
                             is_achieved, issue, advice = verify_goal_on_desktop(
                                 user_prompt=u_msg,
                                 tool_name=clean_tool_name,
                                 tool_params=params,
                                 tool_result=res_str,
                                 audit_data=audit,
+                                executed_tools_history=state_tracker["executed_tools_history"],
                             )
                             state_tracker["had_desktop_action"] = True
                             state_tracker["last_goal_achieved"] = is_achieved
@@ -1496,6 +1505,7 @@ Use Computer-Use tools ONLY when the user asks to control desktop GUI apps, brow
         state_tracker = {
             "step_number": 0,
             "action_signatures": [],
+            "executed_tools_history": [],
             "user_message": user_message,
             "had_desktop_action": False,
             "last_goal_achieved": True,
@@ -1626,21 +1636,46 @@ Use Computer-Use tools ONLY when the user asks to control desktop GUI apps, brow
 
                 resp = await chat_session.send_message(user_message)
 
-                # Closed-Loop Self-Correction & Redirection Loop (Guidance / Recoverable Errors / Visual Mismatch)
-                max_reflections = 3
-                while (
-                    (
-                        state_tracker.get("has_guidance_redirection")
+                # Closed-Loop Self-Correction, Anti-Stubbornness & Visual Verification Loop
+                max_reflections = 4
+                while state_tracker.get("reflection_count", 0) < max_reflections:
+                    resp_txt = (getattr(resp, "text", None) or "").strip()
+                    is_refusal, refusal_reason = detect_stubborn_refusal_or_delegation(resp_txt)
+                    needs_in_app, in_app_advice = prompt_requires_in_app_interaction(user_message)
+                    hist_tools = state_tracker.get("executed_tools_history", [])
+                    did_interactive = any(t in INTERACTIVE_INPUT_TOOLS or t == "computer_use" for t in hist_tools)
+                    premature_prep_stop = bool(needs_in_app and state_tracker.get("had_desktop_action") and not did_interactive)
+
+                    if not (
+                         is_refusal
+                        or premature_prep_stop
+                        or state_tracker.get("has_guidance_redirection")
                         or (state_tracker.get("has_errors") and not state_tracker.get("last_goal_achieved", False))
                         or (state_tracker.get("had_desktop_action") and not state_tracker.get("last_goal_achieved", True))
-                    )
-                    and state_tracker.get("reflection_count", 0) < max_reflections
-                ):
+                    ):
+                        break
                     state_tracker["reflection_count"] = state_tracker.get("reflection_count", 0) + 1
                     ref_idx = state_tracker["reflection_count"]
 
+                    # Priority 0: Anti-Stubbornness & Anti-Premature-Stop Gate
+                    if is_refusal or premature_prep_stop:
+                        reason_msg = refusal_reason if is_refusal else f"Premature task stop after preparatory tools {hist_tools} without performing the in-app interaction."
+                        advice_msg = in_app_advice or "Call `inspect_screen_vision` or `computer_locate_and_click` to physically click the target button on screen right now."
+                        logger.warning(f"[Engine] Anti-Stubbornness / Premature-Stop Gate triggered (#{ref_idx}): {reason_msg}")
+                        directive_prompt = (
+                            f"[MANDATORY AUTONOMOUS COMPLETION DIRECTIVE (Turn #{ref_idx})]:\n"
+                            f"- Violation Detected: {reason_msg}\n"
+                            f"- Original User Command: \"{user_message}\"\n"
+                            f"- Tools Executed So Far: {hist_tools}\n\n"
+                            f"STRICT COMPLIANCE MANDATE:\n"
+                            f"1. You are FORBIDDEN from stopping halfway or telling the user they are 'one click away' or asking them to click Play themselves.\n"
+                            f"2. Do NOT make excuses about DirectX, game engines, or overlays.\n"
+                            f"3. Execute the next physical step right now: {advice_msg}"
+                        )
+                        state_tracker["last_goal_achieved"] = True
+
                     # Priority 1: Operational Guidance Redirection (tool returned guidance notice or prohibited method)
-                    if state_tracker.get("has_guidance_redirection"):
+                    elif state_tracker.get("has_guidance_redirection"):
                         guidance = state_tracker.pop("guidance_message", "Your previous tool returned an operational guidance directive.")
                         state_tracker["has_guidance_redirection"] = False
                         logger.info(f"[Engine] Triggering closed-loop redirection cycle #{ref_idx} due to guidance notice: {guidance[:100]}")

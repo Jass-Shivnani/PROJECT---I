@@ -46,7 +46,7 @@ export class NeuralAudioClient {
   private selectedMicId: string = localStorage.getItem(STORAGE_KEY_MIC_ID) || '';
   private selectedSpeakerId: string = localStorage.getItem(STORAGE_KEY_SPEAKER_ID) || '';
 
-  private vadThreshold = 0.015;
+  private vadThreshold = 0.005;
   private isSpeakingLocally = false;
   private silenceFrames = 0;
   private speechFrames = 0;
@@ -393,25 +393,21 @@ export class NeuralAudioClient {
         }
         const rms = Math.sqrt(sum / inputData.length);
 
-        // When the model is speaking, require louder speech (0.05) to avoid speaker echo interrupting playback
-        const activeThreshold = this.isModelSpeaking ? 0.05 : this.vadThreshold;
-
-        if (rms >= activeThreshold) {
+        if (rms >= this.vadThreshold) {
           this.speechFrames++;
           this.silenceFrames = 0;
 
-          if (this.speechFrames >= 3) {
+          if (this.speechFrames >= 2) {
             if (!this.isSpeakingLocally) {
               this.isSpeakingLocally = true;
               if (this.isModelSpeaking) {
-                // User intentionally spoke loudly over the model to interrupt
                 this.interruptPlayback();
               }
             }
           }
         } else {
           this.silenceFrames++;
-          if (this.silenceFrames >= 16) {
+          if (this.silenceFrames >= 8) {
             if (this.isSpeakingLocally) {
               this.isSpeakingLocally = false;
               this.speechFrames = 0;

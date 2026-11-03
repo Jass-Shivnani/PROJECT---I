@@ -54,7 +54,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   selectedSpeakerId = '',
   onSelectSpeaker,
 }) => {
-  const [activeTab, setActiveTab] = useState<'models' | 'integrations' | 'safety' | 'voice' | 'storage'>('models');
   const [micDevices, setMicDevices] = useState<AudioDeviceOption[]>([]);
   const [speakerDevices, setSpeakerDevices] = useState<AudioDeviceOption[]>([]);
   const [voiceName, setVoiceName] = useState('Aoede');
@@ -71,6 +70,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       loadAudioDevices();
     }
   }, [isOpen, activeTab]);
+  const [activeTab, setActiveTab] = useState<'models' | 'integrations' | 'safety' | 'voice' | 'storage'>('models');
   const [integrationsData, setIntegrationsData] = useState<any>({ total: 8, connected: 0, integrations: [] });
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [busyService, setBusyService] = useState<string>('');

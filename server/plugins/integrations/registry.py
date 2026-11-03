@@ -21,7 +21,7 @@ from server.plugins.hooks import HookRunner
 from server.plugins.permissions import PermissionManager, Permission
 from server.plugins.base import DioneTool, ToolParameter
 from .base import CredentialVault, BaseIntegration, IntegrationDisconnectedError
-from .google_oauth import GOOGLE_SERVICE_IDS, UNIFIED_GOOGLE_SCOPES, run_unified_google_oauth
+from .google_oauth import GOOGLE_SERVICE_IDS, UNIFIED_GOOGLE_SCOPES, load_saved_google_token_file, run_unified_google_oauth
 from .google_drive import GoogleDriveIntegration
 from .google_photos import GooglePhotosIntegration
 from .google_mail import GoogleMailIntegration
@@ -127,8 +127,12 @@ class IntegrationRegistry:
             if not self._permissions.check(iid, perm):
                 self._permissions.grant(iid, perm, granted_by="system_bootstrap", reason="Default integration capability")
         
-        # Restore credentials if available
+        # Restore credentials if available from vault or google_oauth_token.json
         creds = self._vault.retrieve(iid)
+        if not creds and iid in GOOGLE_SERVICE_IDS:
+            creds = load_saved_google_token_file()
+            if creds:
+                creds.integration_id = iid
         if creds:
             integration.credentials = creds
             integration.status = IntegrationStatus.CONNECTED
@@ -495,8 +499,15 @@ class IntegrationRegistry:
                     # Check if unified Google credentials were added since startup
                     if not integration.credentials:
                         restored = self._vault.retrieve(integration.INTEGRATION_ID)
+                        if not restored and integration.INTEGRATION_ID in GOOGLE_SERVICE_IDS:
+                            restored = load_saved_google_token_file()
+                            if restored:
+                                restored.integration_id = integration.INTEGRATION_ID
                         if restored:
                             integration.credentials = restored
+                    # Allow Google Photos tools to use Tier 3 local workstation pictures fallback even when offline
+                    if integration.INTEGRATION_ID == "google_photos" and tool_name in ("google_photos_search", "google_photos_memories", "google_photos_albums"):
+                        return await self._dispatch_tool(integration, tool_name, params)
                     live_status = await self.verify_status(integration.INTEGRATION_ID)
                     if live_status != IntegrationStatus.CONNECTED:
                         # For Gmail tools, gracefully fall back to EmailPlugin if available
@@ -594,6 +605,14 @@ class IntegrationRegistry:
                 file_id=str(params.get("file_id") or "").strip()
             )
 
+        if tool_name == "google_drive_create_file" and hasattr(integration, "create_file_or_doc"):
+            return await integration.create_file_or_doc(
+                title=str(params.get("title") or "Dione Document").strip(),
+                content=str(params.get("content") or ""),
+                file_type=str(params.get("file_type") or "doc").strip(),
+                folder_id=str(params.get("folder_id") or "").strip(),
+            )
+
         if tool_name == "google_drive_upload" and hasattr(integration, "upload_file"):
             file_path, _ = self._resolve_file_from_params(params)
             return await integration.upload_file(
@@ -634,8 +653,20 @@ class IntegrationRegistry:
                 count=int(params.get("count") or 10),
             )
 
+        if tool_name == "google_photos_albums" and hasattr(integration, "list_albums"):
+            return await integration.list_albums(
+                count=int(params.get("count") or 15),
+            )
+
         if tool_name == "google_photos_memories" and hasattr(integration, "get_memories"):
             return await integration.get_memories()
+
+        if tool_name == "google_photos_upload" and hasattr(integration, "upload_photo"):
+            file_path, _ = self._resolve_file_from_params(params)
+            return await integration.upload_photo(
+                file_path=file_path or str(params.get("file_path") or "").strip(),
+                description=str(params.get("description") or "").strip(),
+            )
 
         # --- Slack ---
         if tool_name == "slack_send" and hasattr(integration, "send_message"):
