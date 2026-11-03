@@ -179,6 +179,16 @@ class SystemPlugin(BasePlugin):
         """
         cmd_lower = command.lower().strip()
 
+        # Guardrail & Auto-Router 0: Intercept desktop app launches via 'start <app>' and route to ComputerUsePlugin
+        if cmd_lower.startswith("start ") and not any(b in cmd_lower for b in ["start chrome", "start msedge", "start edge", "http://", "https://"]):
+            app_raw = re.sub(r'^start\s+["\']?', '', command.strip(), flags=re.I)
+            app_name = re.sub(r'["\']?$', '', app_raw).strip()
+            if app_name and len(app_name) < 40 and not any(c in app_name for c in (";", "&", "|", ">", "<")):
+                from server.plugins.builtin.computer_use_plugin import ComputerUsePlugin
+                cup = ComputerUsePlugin()
+                res = await cup.launch_app(app=app_name)
+                return f"[Auto-Routed to ComputerUsePlugin.launch_app] {res}"
+
         # Guardrail & Auto-Router 1: Intercept browser / video launches via raw command and execute cleanly
         if any(b in cmd_lower for b in ["start chrome", "start msedge", "start edge", "youtube.com", "http://", "https://"]):
             from server.plugins.builtin.computer_use_plugin import ComputerUsePlugin
@@ -318,6 +328,10 @@ class SystemPlugin(BasePlugin):
             loop = asyncio.get_running_loop()
 
             def _sync_exec():
+                if command.strip().lower().startswith("start "):
+                    # Popen so cmd /c start does not block pipe closure on GUI apps like mspaint, notepad, calc
+                    subprocess.Popen(command, shell=True)
+                    return subprocess.CompletedProcess(args=command, returncode=0, stdout=f"Launched '{command}' in background", stderr="")
                 return subprocess.run(
                     command,
                     shell=True,

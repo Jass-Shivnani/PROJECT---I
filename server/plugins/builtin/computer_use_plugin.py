@@ -887,24 +887,62 @@ class ComputerUsePlugin(BasePlugin):
 
         return f"Playing YouTube video '{query}' at {target_url} (fullscreen={fullscreen})."
 
+    async def _launch_via_start_menu(self, app_name: str) -> bool:
+        """
+        Human-like application launch via Windows Start Menu:
+        1. Presses Windows key (VK_LWIN 0x5B) to trigger Start Menu search.
+        2. Waits 350ms for Windows search bar to gain focus.
+        3. Types the application name.
+        4. Waits 450ms for Windows search to index and highlight the top match.
+        5. Presses Enter to launch.
+        """
+        try:
+            self._send_native_win32_key("win")
+            await asyncio.sleep(0.35)
+            await self.computer_type(text=app_name, press_enter=False)
+            await asyncio.sleep(0.45)
+            self._send_native_win32_key("enter")
+            return True
+        except Exception as e:
+            logger.debug(f"[StartMenuLaunch] Error launching '{app_name}': {e}")
+            return False
+
     @dione_tool(
-        description="Launch or focus a desktop application by name (e.g. 'Spotify', 'Chrome', 'Edge', 'VS Code', 'Notepad', 'Calculator', 'Explorer', 'Valorant', 'Riot Client') with a 1.8s render settle.",
+        description="Launch or focus a desktop application by name (e.g. 'Paint', 'Spotify', 'Chrome', 'Edge', 'VS Code', 'Notepad', 'Calculator', 'Explorer', 'Valorant', 'Riot Client') using human-like Windows Start Menu search or direct focus with a 1.8s render settle.",
         permission_level="execute",
         requires_confirmation=False,
     )
     async def launch_app(self, app: str) -> str:
-        """Launch or focus desktop application with 1.8s render settle standard."""
+        """Launch or focus desktop application via native Windows Start Menu with 1.8s render settle standard."""
         a_lower = app.lower().strip()
+        clean_name = a_lower.replace("mspaint", "paint").replace("calc", "calculator")
 
-        # First check if already open and focus it
-        existing = self._focus_window_by_keyword(a_lower)
+        # 1. First check if already open and focus it
+        existing = self._focus_window_by_keyword(clean_name) or self._focus_window_by_keyword(a_lower)
         if not existing and a_lower in ("valorant", "riot"):
             existing = self._focus_window_by_keyword("riot") or self._focus_window_by_keyword("valorant")
+        if not existing and a_lower in ("paint", "mspaint"):
+            existing = self._focus_window_by_keyword("paint")
 
         if existing:
             await asyncio.sleep(0.65)
             return f"Focused already-running window: '{existing['title']}' (HWND: {existing['hwnd']})."
 
+        # 2. Preferred Human-Like Method: Windows Key -> Type Name -> Press Enter
+        # Zero command prompt / zero CMD pipe hangs
+        ok = await self._launch_via_start_menu(clean_name)
+        if ok:
+            await asyncio.sleep(1.8)  # 1.8s render settle standard
+            focused = self._focus_window_by_keyword(clean_name) or self._focus_window_by_keyword(a_lower)
+            if not focused and a_lower in ("valorant", "riot"):
+                focused = self._focus_window_by_keyword("riot") or self._focus_window_by_keyword("valorant")
+            if not focused and a_lower in ("paint", "mspaint"):
+                focused = self._focus_window_by_keyword("paint")
+            await asyncio.sleep(0.65)
+            win_title = focused["title"] if focused else clean_name.capitalize()
+            return f"Launched and focused '{win_title}' via Windows Start Menu."
+
+        # 3. Fallback: Known binary paths
         known_map = {
             "chrome": [str(CHROME_EXE)],
             "google chrome": [str(CHROME_EXE)],
@@ -912,6 +950,8 @@ class ComputerUsePlugin(BasePlugin):
             "microsoft edge": [str(EDGE_EXE)],
             "riot client": [str(RIOT_EXE)],
             "valorant": [str(RIOT_EXE), "--launch-product=valorant", "--launch-patchline=live"],
+            "paint": ["mspaint.exe"],
+            "mspaint": ["mspaint.exe"],
             "notepad": ["notepad.exe"],
             "calc": ["calc.exe"],
             "calculator": ["calc.exe"],
@@ -927,9 +967,7 @@ class ComputerUsePlugin(BasePlugin):
             try:
                 subprocess.Popen(cmd_args, shell=(cmd_args[0] in ("cmd", "code")))
                 await asyncio.sleep(1.8)  # 1.8s post-app launch settle standard
-                focused = self._focus_window_by_keyword(a_lower) or (
-                    self._focus_window_by_keyword("riot") if "valorant" in a_lower else None
-                )
+                focused = self._focus_window_by_keyword(clean_name) or self._focus_window_by_keyword(a_lower)
                 await asyncio.sleep(0.65)
                 win_title = focused["title"] if focused else app
                 return f"Launched and focused '{win_title}'."
@@ -939,7 +977,7 @@ class ComputerUsePlugin(BasePlugin):
         try:
             subprocess.Popen(f'start "" "{app}"', shell=True)
             await asyncio.sleep(1.8)
-            focused = self._focus_window_by_keyword(a_lower)
+            focused = self._focus_window_by_keyword(clean_name) or self._focus_window_by_keyword(a_lower)
             await asyncio.sleep(0.65)
             win_title = focused["title"] if focused else app
             return f"Launched application '{win_title}'."
