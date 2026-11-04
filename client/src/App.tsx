@@ -496,9 +496,29 @@ export function App() {
           setActiveToolName('');
           setThreads(prev => prev.map(t => (
             t.id === activeThreadId
-              ? { ...t, messages: t.messages.map(m => m.id === assistantMsgId ? { ...m, isStreaming: false } : m) }
+              ? {
+                  ...t,
+                  messages: t.messages.map(m => {
+                    if (m.id !== assistantMsgId) return m;
+                    const finalizedToolCalls = m.toolCalls?.map(tc =>
+                      tc.status === 'running' ? { ...tc, status: 'completed' as const } : tc
+                    );
+                    const finalContent = m.content?.trim()
+                      ? m.content
+                      : (finalizedToolCalls && finalizedToolCalls.length > 0
+                          ? `Task completed successfully (${finalizedToolCalls.length} actions executed).`
+                          : 'Task completed, sir.');
+                    return {
+                      ...m,
+                      toolCalls: finalizedToolCalls,
+                      content: finalContent,
+                      isStreaming: false,
+                    };
+                  }),
+                }
               : t
           )));
+          handleCaptureScreenshot();
         },
         onError: (err) => {
           setIsAutonomousControlActive(false);

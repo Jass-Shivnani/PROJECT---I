@@ -96,6 +96,33 @@ export const Composer: React.FC<ComposerProps> = ({
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4 pb-4 pt-1">
+      {/* 1-Click Live Demo Deck Bar */}
+      <div className="mb-2 flex items-center gap-1.5 overflow-x-auto pb-1 text-[11px] scrollbar-none select-none">
+        <span className="text-[10px] uppercase font-bold tracking-wider text-slate-500 whitespace-nowrap mr-1 flex items-center gap-1">
+          <span>⚡</span> Live Demo Deck:
+        </span>
+        {[
+          { label: '🎨 Paint Circle', prompt: 'open paint and draw a circle' },
+          { label: '⭐ Star & Heart', prompt: 'open paint and draw a star and a heart' },
+          { label: '🏠 Paint House', prompt: 'open paint and draw a house' },
+          { label: '📝 Notepad Note', prompt: "open notepad and write 'Dione Autonomous Agent v7.0 Ready'" },
+          { label: '🐍 Hermes PTC', prompt: 'use execute_code to list the workspace directory and summarize core modules' },
+          { label: '☁️ Drive & Photos', prompt: 'search my Google Drive files and list my recent Google Photos' },
+          { label: '▶️ YouTube Lofi', prompt: 'play lofi hip hop radio on youtube in full screen' },
+          { label: '🖥️ System Info', prompt: 'check my system hardware and resource usage' },
+        ].map((item, idx) => (
+          <button
+            key={idx}
+            type="button"
+            disabled={isLoading}
+            onClick={() => onSend(item.prompt)}
+            className="px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-white/[0.09] border border-white/[0.08] hover:border-violet-500/40 text-slate-300 hover:text-white whitespace-nowrap transition-all duration-150 flex items-center gap-1 active:scale-95 disabled:opacity-40"
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+
       {/* Live Voice Status Strip when active */}
       {isListening && (
         <div className="mb-2 px-3.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-between text-xs text-emerald-200">

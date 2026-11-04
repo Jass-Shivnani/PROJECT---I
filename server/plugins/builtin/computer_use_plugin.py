@@ -250,6 +250,109 @@ class ComputerUsePlugin(BasePlugin):
         time.sleep(0.08)
         return True
 
+    def _get_screen_metrics(self) -> Tuple[int, int]:
+        try:
+            import ctypes
+            if hasattr(ctypes, "windll"):
+                return (ctypes.windll.user32.GetSystemMetrics(0), ctypes.windll.user32.GetSystemMetrics(1))
+        except Exception:
+            pass
+        return (1920, 1080)
+
+    def _find_paint_canvas_bounds(self) -> Tuple[int, int, int, int]:
+        """
+        Finds the exact MS Paint / drawing canvas rectangle on screen via Windows UIA
+        or active window geometry (excluding the top 170px Ribbon/toolbar).
+        Returns (left, top, right, bottom).
+        """
+        sw, sh = self._get_screen_metrics()
+        try:
+            import uiautomation as auto
+            fg = auto.GetForegroundControl()
+            if fg:
+                def _find_canvas(ctrl, depth: int = 0):
+                    if depth > 6:
+                        return None
+                    try:
+                        name = (ctrl.Name or "").lower()
+                        cls = (ctrl.ClassName or "").lower()
+                        rect = ctrl.BoundingRectangle
+                        if rect and rect.width() > 250 and rect.height() > 200:
+                            if any(k in name for k in ("canvas", "image", "drawing", "page")) or any(
+                                k in cls for k in ("mspaintview", "a2fxw", "canvas", "paint")
+                            ):
+                                return (rect.left, rect.top, rect.right, rect.bottom)
+                        for child in ctrl.GetChildren():
+                            res = _find_canvas(child, depth + 1)
+                            if res:
+                                return res
+                    except Exception:
+                        pass
+                    return None
+
+                canvas_rect = _find_canvas(fg, 0)
+                if canvas_rect:
+                    return canvas_rect
+
+                wrect = fg.BoundingRectangle
+                if wrect and wrect.width() > 300 and wrect.height() > 250:
+                    return (
+                        wrect.left + 30,
+                        wrect.top + 170,
+                        wrect.right - 30,
+                        wrect.bottom - 50,
+                    )
+        except Exception:
+            pass
+
+        return (int(sw * 0.15), int(sh * 0.22), int(sw * 0.85), int(sh * 0.85))
+
+    def _drag_native_win32_path(
+        self,
+        points: List[Tuple[int, int]],
+        step_delay_s: float = 0.012,
+        button: str = "left",
+    ) -> bool:
+        """
+        Executes a continuous mouse drag along a sequence of (x, y) points with
+        cursor settle, down-hold, smooth interpolation, and guaranteed release.
+        """
+        import ctypes
+        if not points or len(points) < 2 or not hasattr(ctypes, "windll"):
+            return False
+        self._bind_interactive_desktop()
+        user32 = ctypes.windll.user32
+        MOUSEEVENTF_MOVE = 0x0001
+        MOUSEEVENTF_LEFTDOWN = 0x0002
+        MOUSEEVENTF_LEFTUP = 0x0004
+        MOUSEEVENTF_RIGHTDOWN = 0x0008
+        MOUSEEVENTF_RIGHTUP = 0x0010
+
+        btn = (button or "left").lower()
+        down_flag = MOUSEEVENTF_RIGHTDOWN if btn == "right" else MOUSEEVENTF_LEFTDOWN
+        up_flag = MOUSEEVENTF_RIGHTUP if btn == "right" else MOUSEEVENTF_LEFTUP
+
+        x0, y0 = int(points[0][0]), int(points[0][1])
+        user32.SetCursorPos(x0, y0)
+        user32.mouse_event(MOUSEEVENTF_MOVE, 0, 0, 0, 0)
+        time.sleep(0.08)
+
+        try:
+            user32.mouse_event(down_flag, 0, 0, 0, 0)
+            time.sleep(0.06)
+
+            for px, py in points[1:]:
+                user32.SetCursorPos(int(px), int(py))
+                user32.mouse_event(MOUSEEVENTF_MOVE, 0, 0, 0, 0)
+                time.sleep(max(0.005, float(step_delay_s)))
+
+            time.sleep(0.05)
+        finally:
+            user32.mouse_event(up_flag, 0, 0, 0, 0)
+            time.sleep(0.08)
+
+        return True
+
     def _list_native_win32_windows(self) -> List[Dict[str, Any]]:
         """Direct Win32 EnumWindows discovery with foreground flag."""
         import ctypes
@@ -715,12 +818,13 @@ class ComputerUsePlugin(BasePlugin):
             ok = self._drag_native_win32(int(coordinate[0]), int(coordinate[1]), int(coordinate[2]), int(coordinate[3]))
             return json.dumps({"ok": ok, "action": act, "from": coordinate[:2], "to": coordinate[2:4]})
 
-        if act in ("draw_circle", "circle"):
+        if act in ("draw_shape", "draw_circle", "shape", "circle"):
+            s_name = text or "circle"
             cx = int(coordinate[0]) if coordinate and len(coordinate) >= 2 else 700
             cy = int(coordinate[1]) if coordinate and len(coordinate) >= 2 else 500
-            r = int(amount or 80)
-            ok = self._draw_circle_native_win32(cx, cy, radius=r)
-            return json.dumps({"ok": ok, "action": act, "center": [cx, cy], "radius": r})
+            r = int(amount or 120)
+            res = await self.computer_draw_shape(shape=s_name, center_x=cx, center_y=cy, radius=r, app=(app or "mspaint"))
+            return json.dumps({"ok": True, "action": act, "result": res})
 
         if act == "type" and text is not None:
             return await self.computer_type(text=text, press_enter=False)
@@ -852,14 +956,400 @@ class ComputerUsePlugin(BasePlugin):
         return f"Dragged mouse from ({start_x}, {start_y}) to ({end_x}, {end_y}) [success={ok}]."
 
     @dione_tool(
+        description=(
+            "Draw a geometric shape or freehand path directly onto MS Paint (`mspaint`), a drawing canvas, or the active screen: "
+            "supports shape='circle', 'square', 'rectangle', 'triangle', 'star', 'heart', 'smiley', 'spiral', 'line', 'house', 'diamond', or 'arrow'. "
+            "Automatically launches/focuses Paint, locates the white canvas below the Ribbon header, and draws with smooth SendInput mouse synthesis."
+        ),
+        permission_level="execute",
+        requires_confirmation=False,
+    )
+    async def computer_draw_shape(
+        self,
+        shape: str = "circle",
+        center_x: int = 700,
+        center_y: int = 500,
+        radius: int = 120,
+        app: str = "mspaint",
+    ) -> str:
+        """
+        Draws one of the 12 verified geometric shapes on MS Paint or drawing canvas.
+        Guards against center_x/center_y = 0 with safe canvas clamping.
+        """
+        # 1. Minimize Dione so it never blocks the Paint canvas
+        try:
+            from server.core.runtime.computer_use import get_computer_use_operator
+            get_computer_use_operator().minimize_dione()
+        except Exception:
+            pass
+
+        # 2. Ensure target app is open and brought to foreground
+        target_app = (app or "mspaint").strip().lower()
+        focused = self._focus_window_by_keyword(target_app)
+        if not focused:
+            await self.launch_app(target_app)
+            await asyncio.sleep(1.0)
+            focused = self._focus_window_by_keyword(target_app)
+        await asyncio.sleep(0.4)
+
+        # 3. Determine safe canvas bounds and center point
+        c_left, c_top, c_right, c_bottom = self._find_paint_canvas_bounds()
+
+        # Ribbon safety: Paint ribbon toolbar occupies top ~170px of the window
+        min_safe_y = max(c_top + 170, c_top + 90)
+        max_safe_y = max(min_safe_y + 120, c_bottom - 90)
+        min_safe_x = c_left + 90
+        max_safe_x = max(min_safe_x + 120, c_right - 90)
+
+        # Clamping guard against Gemini passing center_x=0, center_y=0
+        if center_x is None or center_x <= 0:
+            cx = int((min_safe_x + max_safe_x) // 2)
+        else:
+            cx = max(min_safe_x, min(int(center_x), max_safe_x))
+
+        if center_y is None or center_y <= 0:
+            cy = int((min_safe_y + max_safe_y) // 2)
+        else:
+            cy = max(min_safe_y, min(int(center_y), max_safe_y))
+
+        max_r = max(35, min(int(radius or 120), (max_safe_x - min_safe_x) // 3, (max_safe_y - min_safe_y) // 3))
+
+        # 4. Activate canvas with initial click
+        self._click_native_win32(cx, cy)
+        await asyncio.sleep(0.12)
+
+        s_type = (shape or "circle").strip().lower()
+        strokes: List[List[Tuple[int, int]]] = []
+
+        # 1. Circle / Oval
+        if s_type in ("circle", "oval", "ring"):
+            steps = 72
+            pts = [
+                (
+                    int(round(cx + max_r * math.cos(2.0 * math.pi * i / steps))),
+                    int(round(cy + max_r * math.sin(2.0 * math.pi * i / steps))),
+                )
+                for i in range(steps + 1)
+            ]
+            strokes.append(pts)
+
+        # 2. Square
+        elif s_type in ("square", "box"):
+            corners = [
+                (cx - max_r, cy - max_r),
+                (cx + max_r, cy - max_r),
+                (cx + max_r, cy + max_r),
+                (cx - max_r, cy + max_r),
+                (cx - max_r, cy - max_r),
+            ]
+            pts = []
+            for i in range(len(corners) - 1):
+                x1, y1 = corners[i]
+                x2, y2 = corners[i + 1]
+                for step in range(16):
+                    t = step / 15.0
+                    pts.append((int(x1 + (x2 - x1) * t), int(y1 + (y2 - y1) * t)))
+            strokes.append(pts)
+
+        # 3. Rectangle
+        elif s_type in ("rectangle", "rect"):
+            rx = int(max_r * 1.45)
+            ry = int(max_r * 0.85)
+            corners = [
+                (cx - rx, cy - ry),
+                (cx + rx, cy - ry),
+                (cx + rx, cy + ry),
+                (cx - rx, cy + ry),
+                (cx - rx, cy - ry),
+            ]
+            pts = []
+            for i in range(len(corners) - 1):
+                x1, y1 = corners[i]
+                x2, y2 = corners[i + 1]
+                for step in range(16):
+                    t = step / 15.0
+                    pts.append((int(x1 + (x2 - x1) * t), int(y1 + (y2 - y1) * t)))
+            strokes.append(pts)
+
+        # 4. Triangle
+        elif s_type == "triangle":
+            corners = [
+                (cx, cy - max_r),
+                (cx + int(max_r * 0.95), cy + int(max_r * 0.85)),
+                (cx - int(max_r * 0.95), cy + int(max_r * 0.85)),
+                (cx, cy - max_r),
+            ]
+            pts = []
+            for i in range(len(corners) - 1):
+                x1, y1 = corners[i]
+                x2, y2 = corners[i + 1]
+                for step in range(18):
+                    t = step / 17.0
+                    pts.append((int(x1 + (x2 - x1) * t), int(y1 + (y2 - y1) * t)))
+            strokes.append(pts)
+
+        # 5. Star (5-pointed)
+        elif s_type == "star":
+            outer_r = max_r
+            inner_r = int(max_r * 0.42)
+            verts = []
+            for i in range(11):
+                ang = -math.pi / 2.0 + i * (math.pi / 5.0)
+                r_curr = outer_r if i % 2 == 0 else inner_r
+                verts.append((int(cx + r_curr * math.cos(ang)), int(cy + r_curr * math.sin(ang))))
+            pts = []
+            for i in range(len(verts) - 1):
+                x1, y1 = verts[i]
+                x2, y2 = verts[i + 1]
+                for step in range(10):
+                    t = step / 9.0
+                    pts.append((int(x1 + (x2 - x1) * t), int(y1 + (y2 - y1) * t)))
+            strokes.append(pts)
+
+        # 6. Heart (Cardioid)
+        elif s_type == "heart":
+            steps = 72
+            pts = []
+            scale = max_r / 16.0
+            for i in range(steps + 1):
+                t = 2.0 * math.pi * i / steps
+                hx = 16.0 * (math.sin(t) ** 3)
+                hy = -(13.0 * math.cos(t) - 5.0 * math.cos(2 * t) - 2.0 * math.cos(3 * t) - math.cos(4 * t))
+                pts.append((int(cx + hx * scale), int(cy + hy * scale)))
+            strokes.append(pts)
+
+        # 7. Smiley Face
+        elif s_type in ("smiley", "face"):
+            steps = 60
+            strokes.append([
+                (int(cx + max_r * math.cos(2 * math.pi * i / steps)), int(cy + max_r * math.sin(2 * math.pi * i / steps)))
+                for i in range(steps + 1)
+            ])
+            er = max(10, max_r // 8)
+            lx, ly = cx - int(max_r * 0.35), cy - int(max_r * 0.25)
+            strokes.append([
+                (int(lx + er * math.cos(2 * math.pi * i / 20)), int(ly + er * math.sin(2 * math.pi * i / 20)))
+                for i in range(21)
+            ])
+            rx_e, ry_e = cx + int(max_r * 0.35), cy - int(max_r * 0.25)
+            strokes.append([
+                (int(rx_e + er * math.cos(2 * math.pi * i / 20)), int(ry_e + er * math.sin(2 * math.pi * i / 20)))
+                for i in range(21)
+            ])
+            sr = int(max_r * 0.55)
+            strokes.append([
+                (int(cx + sr * math.cos(math.pi * 0.15 + math.pi * 0.7 * i / 30)), int(cy + int(max_r * 0.1) + sr * math.sin(math.pi * 0.15 + math.pi * 0.7 * i / 30)))
+                for i in range(31)
+            ])
+
+        # 8. Spiral
+        elif s_type == "spiral":
+            steps = 100
+            pts = []
+            for i in range(steps + 1):
+                t = 4.0 * math.pi * i / steps
+                r_curr = (i / steps) * max_r
+                pts.append((int(cx + r_curr * math.cos(t)), int(cy + r_curr * math.sin(t))))
+            strokes.append(pts)
+
+        # 9. Line
+        elif s_type == "line":
+            strokes.append([(cx - max_r, cy), (cx + max_r, cy)])
+
+        # 10. Diamond
+        elif s_type in ("diamond", "rhombus"):
+            corners = [
+                (cx, cy - max_r),
+                (cx + int(max_r * 0.8), cy),
+                (cx, cy + max_r),
+                (cx - int(max_r * 0.8), cy),
+                (cx, cy - max_r),
+            ]
+            pts = []
+            for i in range(len(corners) - 1):
+                x1, y1 = corners[i]
+                x2, y2 = corners[i + 1]
+                for step in range(16):
+                    t = step / 15.0
+                    pts.append((int(x1 + (x2 - x1) * t), int(y1 + (y2 - y1) * t)))
+            strokes.append(pts)
+
+        # 11. House
+        elif s_type == "house":
+            hw = int(max_r * 0.9)
+            hh = int(max_r * 0.7)
+            b_top = cy - int(max_r * 0.1)
+            b_bot = cy + hh
+            corners_box = [
+                (cx - hw, b_top),
+                (cx + hw, b_top),
+                (cx + hw, b_bot),
+                (cx - hw, b_bot),
+                (cx - hw, b_top),
+            ]
+            pts_box = []
+            for i in range(len(corners_box) - 1):
+                x1, y1 = corners_box[i]
+                x2, y2 = corners_box[i + 1]
+                for step in range(12):
+                    t = step / 11.0
+                    pts_box.append((int(x1 + (x2 - x1) * t), int(y1 + (y2 - y1) * t)))
+            strokes.append(pts_box)
+
+            roof = [
+                (cx - hw, b_top),
+                (cx, cy - max_r),
+                (cx + hw, b_top),
+            ]
+            pts_roof = []
+            for i in range(len(roof) - 1):
+                x1, y1 = roof[i]
+                x2, y2 = roof[i + 1]
+                for step in range(12):
+                    t = step / 11.0
+                    pts_roof.append((int(x1 + (x2 - x1) * t), int(y1 + (y2 - y1) * t)))
+            strokes.append(pts_roof)
+
+            dw = int(hw * 0.3)
+            dh = int(hh * 0.55)
+            door = [
+                (cx - dw, b_bot),
+                (cx - dw, b_bot - dh),
+                (cx + dw, b_bot - dh),
+                (cx + dw, b_bot),
+            ]
+            pts_door = []
+            for i in range(len(door) - 1):
+                x1, y1 = door[i]
+                x2, y2 = door[i + 1]
+                for step in range(8):
+                    t = step / 7.0
+                    pts_door.append((int(x1 + (x2 - x1) * t), int(y1 + (y2 - y1) * t)))
+            strokes.append(pts_door)
+
+        # 12. Arrow
+        elif s_type == "arrow":
+            pts_shaft = [
+                (int(cx - max_r + (max_r * 1.7) * (i / 20.0)), cy)
+                for i in range(21)
+            ]
+            strokes.append(pts_shaft)
+            head_x = cx + int(max_r * 0.7)
+            tip_x = cx + max_r
+            corners_head = [
+                (head_x - int(max_r * 0.35), cy - int(max_r * 0.45)),
+                (tip_x, cy),
+                (head_x - int(max_r * 0.35), cy + int(max_r * 0.45)),
+            ]
+            pts_head = []
+            for i in range(len(corners_head) - 1):
+                x1, y1 = corners_head[i]
+                x2, y2 = corners_head[i + 1]
+                for step in range(12):
+                    t = step / 11.0
+                    pts_head.append((int(x1 + (x2 - x1) * t), int(y1 + (y2 - y1) * t)))
+            strokes.append(pts_head)
+
+        else:
+            strokes.append([(cx - max_r, cy), (cx + max_r, cy)])
+
+        for stroke in strokes:
+            self._drag_native_win32_path(stroke, step_delay_s=0.012, button="left")
+            await asyncio.sleep(0.12)
+
+        return f"Successfully drew '{s_type}' on MS Paint canvas centered at ({cx}, {cy}) with radius={max_r}px."
+
+    @dione_tool(
         description="Physically draw a circle on the active window or canvas (e.g. Paint) by holding mouse left button down and tracing circumference around (center_x, center_y) with given radius (default 80px).",
         permission_level="execute",
         requires_confirmation=False,
     )
     async def computer_draw_circle(self, center_x: int = 700, center_y: int = 500, radius: int = 80) -> str:
         """Physically draw a smooth circle on screen (such as Paint canvas) via parametric mouse tracing."""
-        ok = self._draw_circle_native_win32(center_x, center_y, radius=radius)
-        return f"Drew circle centered at ({center_x}, {center_y}) with radius {radius}px on active canvas [success={ok}]."
+        return await self.computer_draw_shape(shape="circle", center_x=center_x, center_y=center_y, radius=radius, app="mspaint")
+
+    @dione_tool(
+        description=(
+            "Execute a semantic Windows UIAutomation (UIA) action directly on a control by its name: "
+            "supports pattern='invoke' (click button/menu), 'toggle' (checkbox), 'select' (tab/list item), or 'set_value' (text field)."
+        ),
+        permission_level="execute",
+        requires_confirmation=False,
+    )
+    async def computer_uia_action(
+        self,
+        target_name: str,
+        pattern: str = "invoke",
+        value: str = "",
+        app: str = "",
+    ) -> str:
+        """Semantic UIA control invocation without relying on pixel coordinates."""
+        if app and app.strip():
+            self._focus_window_by_keyword(app.strip())
+            await asyncio.sleep(0.3)
+
+        t_low = target_name.strip().lower()
+        pat_low = (pattern or "invoke").strip().lower()
+
+        try:
+            import uiautomation as auto
+            fg = auto.GetForegroundControl()
+            if not fg:
+                return f"No foreground control available; falling back to computer_locate_and_click('{target_name}')."
+
+            matched_ctrl = None
+
+            def _search(ctrl, depth: int = 0):
+                nonlocal matched_ctrl
+                if depth > 6 or matched_ctrl is not None:
+                    return
+                try:
+                    nm = (ctrl.Name or "").strip()
+                    if nm and (nm.lower() == t_low or (len(t_low) >= 3 and t_low in nm.lower())):
+                        matched_ctrl = ctrl
+                        return
+                    for ch in ctrl.GetChildren():
+                        _search(ch, depth + 1)
+                        if matched_ctrl is not None:
+                            return
+                except Exception:
+                    pass
+
+            _search(fg, 0)
+            if not matched_ctrl:
+                return f"UIA control '{target_name}' not found in foreground window."
+
+            if pat_low == "toggle":
+                toggle_pat = matched_ctrl.GetTogglePattern()
+                if toggle_pat:
+                    toggle_pat.Toggle()
+                    return f"Toggled UIA control '{target_name}'."
+            elif pat_low == "select":
+                sel_pat = matched_ctrl.GetSelectionItemPattern()
+                if sel_pat:
+                    sel_pat.Select()
+                    return f"Selected UIA item '{target_name}'."
+            elif pat_low == "set_value" and value:
+                val_pat = matched_ctrl.GetValuePattern()
+                if val_pat:
+                    val_pat.SetValue(value)
+                    return f"Set value of UIA control '{target_name}' to '{value}'."
+
+            inv_pat = matched_ctrl.GetInvokePattern()
+            if inv_pat:
+                inv_pat.Invoke()
+                return f"Invoked UIA button '{target_name}'."
+
+            rect = matched_ctrl.BoundingRectangle
+            if rect:
+                mid_x = (rect.left + rect.right) // 2
+                mid_y = (rect.top + rect.bottom) // 2
+                self._click_native_win32(mid_x, mid_y)
+                return f"Clicked UIA element '{target_name}' at ({mid_x}, {mid_y})."
+
+            return f"Control '{target_name}' found but no actionable UIA pattern available."
+        except Exception as e:
+            return f"UIA action error: {e}"
 
     @dione_tool(
         description="Open Microsoft Edge or Google Chrome to a URL (automatically prepends https:// if needed).",

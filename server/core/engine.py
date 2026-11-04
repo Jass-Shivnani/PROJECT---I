@@ -65,6 +65,13 @@ from server.llm.adapter import LLMRequest, LLMMessage, LLMResponse
 from server.core.loop_detector import ToolLoopDetector
 
 from server.core.tool_truncator import truncate_tool_result_text
+from server.core.tool_repair import (
+    coerce_tool_args_for_callable,
+    detect_and_repair_plaintext_tool_calls,
+    scrub_repetitive_output,
+    synthesize_butter_smooth_summary,
+)
+from server.core.scripted_prelude import try_match_scripted_prelude
 from server.core.goal_verifier import (
     verify_goal_on_desktop,
     detect_stubborn_refusal_or_delegation,
@@ -361,6 +368,12 @@ class DioneEngine:
         self.workspace_manager = get_workspace_manager()
 
         self.memory_plugin = MemoryPlugin()
+        try:
+            from server.plugins.builtin.hermes_execution_plugin import HermesExecutionPlugin
+            self.hermes_plugin = HermesExecutionPlugin()
+        except Exception as e:
+            logger.debug(f"HermesExecutionPlugin init skipped: {e}")
+            self.hermes_plugin = None
 
         self.compactor = SessionCompactor(max_turns_threshold=12, compact_keep_recent=6)
 
@@ -869,57 +882,47 @@ Use Computer-Use tools ONLY when the user asks to control desktop GUI apps, brow
         )()
 
         # Ensure OpenClaw memory tools are always present
-
         if hasattr(self, "memory_plugin") and self.memory_plugin:
-
             all_tools_map["memory_search"] = type("DioneToolStub", (), {"name": "memory_search", "func": self.memory_plugin.memory_search, "description": "Search MEMORY.md and memory logs"})()
-
             all_tools_map["memory_get"] = type("DioneToolStub", (), {"name": "memory_get", "func": self.memory_plugin.memory_get, "description": "Read line range from memory files"})()
-
             all_tools_map["memory_write"] = type("DioneToolStub", (), {"name": "memory_write", "func": self.memory_plugin.memory_write, "description": "Write notes to daily log or MEMORY.md"})()
 
-        if not all_tools_map:
+        # Ensure Hermes execution tools (execute_code, todo, delegate_task) are always present
+        if hasattr(self, "hermes_plugin") and self.hermes_plugin:
+            try:
+                for ht in self.hermes_plugin.get_tools():
+                    h_name = getattr(ht, "name", "").split(".")[-1]
+                    if h_name:
+                        all_tools_map[h_name] = ht
+            except Exception as he:
+                logger.debug(f"Failed to register hermes tools: {he}")
 
+        if not all_tools_map:
             return wrapped_tools
 
         for tool_name, tool_obj in all_tools_map.items():
-
             func = getattr(tool_obj, "func", None)
-
             if not callable(func):
-
                 continue
 
             # Ensure we wrap each unique method once
-
             raw_tool_name = getattr(func, "__name__", tool_name.split(".")[-1])
-
             clean_name = re.sub(r"[^a-zA-Z0-9_]", "_", raw_tool_name)
 
             def make_wrapper(original_func, tool_instance, clean_tool_name: str):
-
                 @functools.wraps(original_func)
-
                 async def tool_wrapper(*args, **kwargs):
-
                     step_num = state_tracker["step_number"] + 1
-
                     state_tracker["step_number"] = step_num
-
                     call_id = f"call_{uuid.uuid4().hex[:8]}"
 
-                    # Extract params dict
-
-                    params = dict(kwargs)
+                    # Coerce and repair parameters (Hermes & OpenClaw arg coercion)
+                    params = coerce_tool_args_for_callable(original_func, dict(kwargs))
 
                     tool_call = ToolCall(
-
                         tool=clean_tool_name,
-
                         params=params,
-
                         call_id=call_id,
-
                     )
 
                     # 0. User Emergency Stop / Takeover Check
@@ -1122,12 +1125,9 @@ Use Computer-Use tools ONLY when the user asks to control desktop GUI apps, brow
                     try:
 
                         if asyncio.iscoroutinefunction(original_func):
-
-                            raw_res = await original_func(*args, **kwargs)
-
+                            raw_res = await original_func(*args, **params)
                         else:
-
-                            raw_res = original_func(*args, **kwargs)
+                            raw_res = original_func(*args, **params)
 
                         res_str = str(raw_res)
 
@@ -1516,6 +1516,46 @@ Use Computer-Use tools ONLY when the user asks to control desktop GUI apps, brow
         }
 
         callables = self._prepare_callable_tools(step_queue, state_tracker)
+        callables_map = {getattr(c, "__name__", ""): c for c in callables}
+
+        # 4.1 Hermes Scripted Prelude (Live Demo Fast-Path):
+        # Executes unambiguous single and multi-step live-demo commands directly through Dione's wrapped tools
+        # (ACTING -> OBSERVING + screenshot capture), eliminating LLM hesitation, redundant tool calls, and 429 rate limits.
+        prelude_plan = try_match_scripted_prelude(user_message)
+        if prelude_plan:
+            logger.info(f"⚡ [Hermes Scripted Prelude] Executing live-demo blueprint for '{user_message}' ({len(prelude_plan)} steps)")
+            for t_name, t_args in prelude_plan:
+                tool_callable = callables_map.get(t_name)
+                if tool_callable:
+                    try:
+                        await tool_callable(**t_args)
+                    except Exception as pe:
+                        logger.warning(f"[Hermes Scripted Prelude] Step '{t_name}' notice: {pe}")
+                else:
+                    logger.warning(f"[Hermes Scripted Prelude] Tool '{t_name}' not in callables_map; skipping.")
+
+                # Drain and yield any steps queued by the tool execution
+                while not step_queue.empty():
+                    try:
+                        step_item = step_queue.get_nowait()
+                        self._current_steps.append(step_item)
+                        yield step_item
+                    except Exception:
+                        break
+
+            # Synthesize butter-smooth executive markdown summary
+            smooth_summary = synthesize_butter_smooth_summary(
+                user_message,
+                state_tracker.get("executed_tools_history", [p[0] for p in prelude_plan])
+            )
+            final_step = EngineStep(
+                step_number=state_tracker["step_number"] + 1,
+                state=EngineState.COMPLETE,
+                final_answer=smooth_summary,
+            )
+            self._current_steps.append(final_step)
+            yield final_step
+            return
 
         # 5. Initialize or Reuse Persistent Async Chat Session (with AI Studio Free Tier Failover Chain)
         preferred_model = (model_override or getattr(self.settings.llm, "model", "gemini-3.5-flash-lite") or "gemini-3.5-flash-lite").strip()
@@ -1724,17 +1764,20 @@ Use Computer-Use tools ONLY when the user asks to control desktop GUI apps, brow
 
                     resp = await chat_session.send_message(directive_prompt)
 
-                if resp.text:
-
-                    return resp.text
+                resp_text = (getattr(resp, "text", None) or "").strip()
+                if resp_text:
+                    # Hermes plaintext tool call recovery & repetition scrubbing
+                    pt_fixed, pt_text = await detect_and_repair_plaintext_tool_calls(resp_text, callables_map)
+                    final_clean = scrub_repetitive_output(pt_text if pt_fixed else resp_text)
+                    if final_clean:
+                        return final_clean
 
                 if state_tracker.get("has_errors"):
-
                     last_err = state_tracker.get("last_error", "An operation failed")
-
                     return f"Encountered an issue executing the requested actions: {last_err}"
 
-                return "Execution completed successfully."
+                # Hermes Empty Response Guard: Synthesize butter-smooth summary rather than generic one-liner
+                return synthesize_butter_smooth_summary(user_message, state_tracker.get("executed_tools_history", []))
 
             except Exception as e:
 
@@ -1765,17 +1808,17 @@ Use Computer-Use tools ONLY when the user asks to control desktop GUI apps, brow
                         resp = await chat_session.send_message(user_message)
                         self.failover_manager.mark_success(candidate_model)
 
-                        if resp.text:
-
-                            return resp.text
+                        resp_text = (getattr(resp, "text", None) or "").strip()
+                        if resp_text:
+                            final_clean = scrub_repetitive_output(resp_text)
+                            if final_clean:
+                                return final_clean
 
                         if state_tracker.get("has_errors"):
-
                             last_err = state_tracker.get("last_error", "An operation failed")
-
                             return f"Encountered an issue executing the requested actions: {last_err}"
 
-                        return "Execution completed successfully."
+                        return synthesize_butter_smooth_summary(user_message, state_tracker.get("executed_tools_history", []))
 
                     except Exception:
 

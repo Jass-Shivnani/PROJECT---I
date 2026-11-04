@@ -82,6 +82,45 @@ export function resolveToolAction(toolCall: ToolCall): ResolvedAction {
     };
   }
 
+  // 0A. Hermes Programmatic Tool Calling & Execution Sandbox
+  if (tool === 'execute_code') {
+    return {
+      title: 'Hermes PTC: Python Sandbox Execution',
+      category: 'terminal',
+      icon: <Terminal className="w-3.5 h-3.5" />,
+      badgeBg: 'bg-emerald-500/20',
+      badgeBorder: 'border-emerald-500/30',
+      badgeText: 'text-emerald-300',
+      isPowerShellOrCli: false,
+    };
+  }
+
+  if (tool === 'todo' || tool === 'delegate_task') {
+    return {
+      title: `Hermes Agent: ${tool.replace('_', ' ').toUpperCase()}`,
+      category: 'system',
+      icon: <Layers className="w-3.5 h-3.5" />,
+      badgeBg: 'bg-indigo-500/20',
+      badgeBorder: 'border-indigo-500/30',
+      badgeText: 'text-indigo-300',
+      isPowerShellOrCli: false,
+    };
+  }
+
+  // 0B. Drawing & Canvas Manipulation Primitives
+  if (tool === 'computer_draw_shape' || tool === 'computer_draw_circle' || tool === 'computer_drag') {
+    const shape = params.shape || (tool.includes('circle') ? 'circle' : 'drag');
+    return {
+      title: `Canvas Draw: ${shape.toUpperCase()} (Win32 Path)`,
+      category: 'mouse',
+      icon: <Sparkles className="w-3.5 h-3.5" />,
+      badgeBg: 'bg-pink-500/20',
+      badgeBorder: 'border-pink-500/30',
+      badgeText: 'text-pink-300',
+      isPowerShellOrCli: false,
+    };
+  }
+
   if (tool.includes('gmail') || tool === 'send_email' || tool === 'read_emails') {
     const recipient = params.to || '';
     const isSend = tool.includes('send');

@@ -65,12 +65,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setSpeakerDevices(outputs);
   };
 
+  const [activeTab, setActiveTab] = useState<'models' | 'integrations' | 'safety' | 'voice' | 'storage'>('models');
+
   useEffect(() => {
     if (isOpen && activeTab === 'voice') {
       loadAudioDevices();
     }
   }, [isOpen, activeTab]);
-  const [activeTab, setActiveTab] = useState<'models' | 'integrations' | 'safety' | 'voice' | 'storage'>('models');
   const [integrationsData, setIntegrationsData] = useState<any>({ total: 8, connected: 0, integrations: [] });
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [busyService, setBusyService] = useState<string>('');

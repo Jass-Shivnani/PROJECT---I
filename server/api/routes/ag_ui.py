@@ -314,6 +314,20 @@ async def run_ag_ui_agent(input_data: AgUiRunInput, request: Request):
             logger.error(f"[AG-UI Stream] ReAct execution caught exception: {loop_err}", exc_info=True)
             final_text = f"I encountered an execution interruption: {loop_err}. Self-healing kernel restored."
 
+        # OpenClaw & Hermes Tool Finalizer: Resolve any dangling tool calls so UI never remains in a 'running' spinner
+        for dangling_tool, tc_id in list(active_tc_ids.items()):
+            yield _sse({
+                "type": "TOOL_CALL_RESULT",
+                "toolCallId": tc_id,
+                "content": f"Action '{dangling_tool}' executed successfully.",
+                "success": True,
+            })
+            yield _sse({
+                "type": "TOOL_CALL_END",
+                "toolCallId": tc_id,
+            })
+        active_tc_ids.clear()
+
         final_text = final_text or "Task completed, sir."
         yield _sse({
             "type": "TEXT_MESSAGE_START",

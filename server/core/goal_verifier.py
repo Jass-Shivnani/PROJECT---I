@@ -33,6 +33,8 @@ INTERACTIVE_INPUT_TOOLS = {
     "computer_hotkey",
     "computer_drag",
     "computer_draw_circle",
+    "computer_draw_shape",
+    "computer_uia_action",
     "play_youtube_video",
 }
 
@@ -95,7 +97,7 @@ def prompt_requires_in_app_interaction(user_prompt: str) -> Tuple[bool, str]:
 
     # Explicit drawing / canvas interaction requests
     if any(k in p for k in ("draw", "paint a", "sketch", "circle", "rectangle", "square", "canvas", "shape")):
-        return True, "Draw the requested shape on the canvas using `computer_draw_circle(center_x=700, center_y=500, radius=80)` or `computer_drag`."
+        return True, "Draw the requested shape on the canvas using `computer_draw_shape(shape='circle', app='mspaint')` or `computer_draw_circle` or `computer_drag`."
 
     return False, ""
 
